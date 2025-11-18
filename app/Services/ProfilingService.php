@@ -100,7 +100,7 @@ class ProfilingService
             'level' => $profileData['level'],
             'traits' => json_encode($profileData['traits']),
             'weak_areas' => json_encode($profileData['weak_areas']),
-            'recommended_fokus' => $profileData['recommended_focus'][0] ?? null, 
+            'recommended_fokus' => $profileData['recommended_focus'][0] ?? null,
             'lifetime_scores' => json_encode($features),
             'last_updated' => now(),
         ]);
@@ -110,12 +110,36 @@ class ProfilingService
             'cluster' => $finalClass,
             'level' => $profileData['level'],
             'traits' => $profileData['traits'],
-            'weak_areas' => $profileData['weak_areas'], 
+            'weak_areas' => $profileData['weak_areas'],
             'recommended_focus' => $profileData['recommended_fokus'],
             'confidence_level' => $this->ann->getConfidence(),
             'profiling_version' => 2,
             'generated_at' => now()->toISOString(),
         ];
+    }
+
+    public function recommendNextQuestion(string $playerId)
+    {
+        $profile = PlayerProfile::findOrFail($playerId);
+        $userScores = json_decode($profile->lifetime_scores, true);
+        
+        $weakestCategory = $this->findWeakestCategory($userScores);
+
+        $questions = DB::table('scenarios')
+                        ->where('category', $weakestCategory)
+                        ->get();
+
+        if ($questions->isEmpty()) {
+            return ['error' => 'No questions found for the weakest category'];
+        }
+
+        return ['error' => 'No suitable challenging question found'];
+    }
+
+    private function findWeakestCategory(array $scores): string
+    {
+        asort($scores);
+        return array_key_first($scores);
     }
 }
 
