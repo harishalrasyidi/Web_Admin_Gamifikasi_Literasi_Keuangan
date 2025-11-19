@@ -13,6 +13,17 @@ class PlayerProfileRepository
             ->first();
     }
 
+    public function updateScores(string $playerId, array $newScores)
+    {
+        return PlayerProfile::where('PlayerId', $playerId)
+            ->update(['lifetime_scores' => $newScores]);
+    }
+
+    public function findProfile(string $playerId)
+    {
+        return PlayerProfile::where('PlayerId', $playerId)->first();
+    }
+
     // --- FUNGSI DIPERBARUI ---
     // Sekarang menerima parameter $reason (opsional)
     public function updateThresholds(string $playerId, array $newThresholds, ?string $reason = null)

@@ -20,11 +20,11 @@ Route::get('/scenarios', [ScenarioController::class, 'index']);
 // API 19 (BARU)
 // Nama '{scenario}' harus cocok dengan variabel $scenario di Controller
 Route::get('/scenario/{scenario}', [ScenarioController::class, 'show']);
-// API 29 - Threshold
-Route::get('/threshold', [ThresholdController::class, 'getThresholds']);
+//API 20
+Route::post('/scenario/submit', [ScenarioController::class, 'submit']);
 //API 30 - Leaderboard
 Route::get('/leaderboard', [LeaderboardController::class, 'getLeaderboard']);
-
+//Tambah daftar sesi selesai
 Route::get('/sessions/completed', [SessionController::class, 'getCompletedSessions']);
 
 // API 28: Kirim Feedback (Trigger Log & Learning)
