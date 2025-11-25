@@ -12,4 +12,5 @@ Route::get('/profiling/cluster/{playerId}', [ProfilingController::class, 'cluste
 Route::prefix('recommendation')->group(function () {
     Route::get('/next', [RecommendationController::class, 'next']);
     Route::get('/path', [RecommendationController::class, 'path']);
+    Route::get('/peer', [RecommendationController::class, 'peer']);
 });

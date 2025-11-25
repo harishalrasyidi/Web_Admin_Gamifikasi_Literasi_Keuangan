@@ -43,4 +43,30 @@ class RecommendationController extends Controller
         return response()->json($result);
     }
 
+    /**
+     * Mendapatkan perbandingan peer berdasarkan player_id
+     */
+    public function peer(Request $request)
+    {
+        $playerId = $request->query('player_id');
+
+        if (!$playerId) {
+            return response()->json(['error' => 'player_id is required'], 400);
+        }
+
+        try {
+            $result = $this->recommendationService->getPeerComparison($playerId);
+
+            if (!$result) {
+                return response()->json([
+                    'error' => 'Player profile or scores not found',
+                    'player_id' => $playerId
+                ], 404);
+            }
+
+            return response()->json($result);
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
