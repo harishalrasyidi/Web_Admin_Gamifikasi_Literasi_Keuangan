@@ -115,34 +115,39 @@
                         <p>Daftar Player</p>
                     </a>
                 </li>
+
 <!-- Recommendations with Submenu -->
-<li class="nav-item has-treeview {{ request()->is('admin/rekomendasi*') || request()->routeIs('admin.learning-path.index') || request()->routeIs('admin.peer-insight.index') ? 'menu-open' : '' }}">
-    <a href="#" class="nav-link {{ request()->is('admin/rekomendasi*') || request()->routeIs('admin.learning-path.index') || request()->routeIs('admin.peer-insight.index') ? 'active' : '' }}"
-       data-bs-toggle="collapse" data-bs-target="#rekomendasiSubmenu" aria-expanded="{{ request()->is('admin/rekomendasi*') || request()->routeIs('admin.learning-path.index') || request()->routeIs('admin.peer-insight.index') ? 'true' : 'false' }}">
+<li class="nav-item has-treeview {{ request()->is('admin/rekomendasi*') ? 'menu-open' : '' }}">
+    <a href="#" class="nav-link {{ request()->is('admin/rekomendasi*') ? 'active' : '' }}"
+       data-bs-toggle="collapse" data-bs-target="#rekomendasiSubmenu" aria-expanded="{{ request()->is('admin/rekomendasi*') ? 'true' : 'false' }}">
         <i class="nav-icon fas fa-lightbulb"></i>
         <p>
             Recommendations
             <i class="right fas fa-angle-left"></i>
         </p>
     </a>
-    <ul class="nav nav-treeview collapse {{ request()->is('admin/rekomendasi*') || request()->routeIs('admin.learning-path.index') || request()->routeIs('admin.peer-insight.index') ? 'show' : '' }}" id="rekomendasiSubmenu">
+    <ul class="nav nav-treeview collapse {{ request()->is('admin/rekomendasi*') ? 'show' : '' }}" id="rekomendasiSubmenu">
         <li class="nav-item">
             <a href="{{ route('admin.rekomendasi.index') }}" class="nav-link {{ request()->routeIs('admin.rekomendasi.index') ? 'active' : '' }}">
+                <i class="fas fa-magic nav-icon text-primary"></i>
                 <p>Rekomendasi Pembelajaran</p>
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ route('admin.learning-path.index') }}" class="nav-link {{ request()->routeIs('admin.learning-path.index') ? 'active' : '' }}">
+            <a href="{{ route('admin.rekomendasi.learning-path.index') }}" class="nav-link {{ request()->routeIs('admin.rekomendasi.learning-path.index') ? 'active' : '' }}">
+                <i class="fas fa-route nav-icon text-success"></i>
                 <p>Learning Path Player</p>
             </a>
         </li>
         <li class="nav-item">
-            <a href="{{ route('admin.peer-insight.index') }}" class="nav-link {{ request()->routeIs('admin.peer-insight.index') ? 'active' : '' }}">
+            <a href="{{ route('admin.rekomendasi.peer-insight.index') }}" class="nav-link {{ request()->routeIs('admin.rekomendasi.peer-insight.index') ? 'active' : '' }}">
+                <i class="fas fa-users nav-icon text-info"></i>
                 <p>Peer Insight</p>
             </a>
         </li>
     </ul>
 </li>
+
             </ul>
         </nav>
         

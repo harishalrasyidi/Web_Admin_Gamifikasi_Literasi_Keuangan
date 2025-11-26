@@ -9,100 +9,319 @@
         Rekomendasi Pembelajaran Lanjutan
     </h2>
     <p class="text-muted mb-4">
-        Pantau rekomendasi pembelajaran untuk setiap pemain dan alasan akademis di baliknya
+        Monitoring saran sistem untuk pembelajaran berikutnya berdasarkan hasil sesi pemain.
     </p>
 
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <label for="playerSelect" class="form-label">Pilih Player</label>
-            <select id="playerSelect" class="form-control form-control-lg">
-                <option value="">-- Pilih player dari daftar --</option>
-                @forelse($players as $p)
-                    <option value="{{ $p->id }}" data-name="{{ $p->name ?? $p->id }}">{{ $p->name ?? $p->id }}</option>
-                @empty
-                    <option value="">-- Tidak ada player --</option>
-                @endforelse
-            </select>
-        </div>
-        <div class="col-md-6 d-flex align-items-end">
-            <button id="btnFetch" class="btn btn-primary btn-lg rounded-pill ml-md-3">
-                <i class="fa fa-search mr-2"></i>Tampilkan Rekomendasi
-            </button>
+    <!-- Player Selection Card -->
+    <div class="bg-white p-4 rounded shadow mb-4">
+        <div class="row">
+            <div class="col-md-6">
+                <label for="playerSelect" class="form-label font-weight-bold">Pilih Pemain (Player ID):</label>
+                <select id="playerSelect" class="form-control form-control-lg" onchange="handlePlayerChange()">
+                    <option value="">-- Pilih player dari daftar --</option>
+                    <option value="p001">Pemain A (ID: p001)</option>
+                    <option value="p002">Pemain B (ID: p002)</option>
+                    <option value="p123" selected>Pemain C (ID: p123) - Data Mock</option>
+                    @forelse($players as $p)
+                        <option value="{{ $p->id }}" data-name="{{ $p->name ?? $p->id }}">{{ $p->name ?? $p->id }} (ID: {{ $p->id }})</option>
+                    @empty
+                    @endforelse
+                </select>
+            </div>
         </div>
     </div>
 
+    <!-- Selected Player Info -->
     <div id="selectedPlayerInfo" class="mb-3"></div>
 
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Player ID</th>
-                <th>Username</th>
-                <th>Locale</th>
-                <th>Created At</th>
-                <th>Status</th>
-                <th>Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($players as $p)
-            <tr>
-                <td>{{ $p->id }}</td>
-                <td>{{ $p->username ?? $p->name ?? '-' }}</td>
-                <td>{{ $p->locale ?? '-' }}</td>
-                <td>{{ $p->created_at ?? '-' }}</td>
-                <td>
-                    <span class="badge {{ $p->status == 'connected' ? 'badge-success' : 'badge-secondary' }}">
-                        {{ $p->status ?? 'unknown' }}
-                    </span>
-                </td>
-                <td>
-                    <a href="/admin/profiling/{{ $p->id }}" class="btn btn-sm btn-outline-primary mr-2">
-                        <i class="fa fa-user mr-1"></i>Profiling
-                    </a>
-                    <a href="/admin/rekomendasi-lanjutan?player_id={{ $p->id }}" class="btn btn-sm btn-outline-success">
-                        <i class="fa fa-lightbulb mr-1"></i>Rekomendasi
-                    </a>
-                </td>
-            </tr>
-            @empty
-            <tr><td colspan="6" class="text-center text-muted">Tidak ada data player</td></tr>
-            @endforelse
-        </tbody>
-    </table>
-
+    <!-- Recommendations Area -->
     <div id="recommendationsArea" class="mt-4"></div>
 @endsection
 
 @push('styles')
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
-    <style>
-        body { background:#f8f9fa; }
-        .chip { display:inline-block; padding:6px 12px; border-radius:20px; background:#e9ecef; font-weight:600; font-size:12px; margin-right:6px; }
-        .badge-peer { background:#17a2b8; color:#fff; padding:6px 10px; border-radius:4px; font-weight:600; }
-        .card-rekomendasi { border-left:4px solid #007bff; transition:all 0.3s; }
-        .card-rekomendasi:hover { box-shadow:0 4px 12px rgba(0,123,255,0.2); transform:translateY(-2px); }
-        .btn-lihat { border-radius:20px; }
-        .form-group label { font-weight:600; color:#333; }
-    </style>
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+    body { 
+        background:#f7f9fc; 
+        font-family: 'Inter', sans-serif;
+    }
+    
+    /* Modern Recommendation Card */
+    .recommendation-card {
+        background: #fff;
+        border-radius: 1.25rem;
+        box-shadow: 0 2px 12px rgba(49,130,206,0.07);
+        border-left: 4px solid #2563eb;
+        margin-bottom: 2rem;
+        padding: 2rem;
+        transition: all 0.3s ease;
+    }
+    .recommendation-card:hover { 
+        box-shadow: 0 8px 25px rgba(49,130,206,0.15);
+        transform: translateY(-2px);
+    }
+    
+    /* Title Styling */
+    .rec-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: #1e293b;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Section Labels */
+    .section-label {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: #2563eb;
+        margin-bottom: 0.5rem;
+        display: block;
+    }
+    
+    /* Info Panels */
+    .info-panel {
+        background: #f8fafc;
+        border-radius: 0.75rem;
+        padding: 1.25rem;
+        height: 100%;
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* Progress Bars */
+    .score-item {
+        margin-bottom: 1rem;
+    }
+    .score-label {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: #64748b;
+        margin-bottom: 0.25rem;
+        display: flex;
+        justify-content: space-between;
+    }
+    .progress-thin {
+        height: 8px;
+        border-radius: 4px;
+        overflow: hidden;
+        background: #e2e8f0;
+    }
+    .progress-bar {
+        border-radius: 4px;
+        transition: width 0.6s ease;
+    }
+    
+    /* Peer Insight */
+    .insight-number {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #059669;
+        line-height: 1;
+        margin-bottom: 0.5rem;
+    }
+    .insight-text {
+        font-size: 0.9rem;
+        color: #64748b;
+        line-height: 1.4;
+    }
+    
+    /* Alert Styling */
+    .player-header {
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        color: white;
+        border: none;
+        border-radius: 1rem;
+        padding: 1rem 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* Demo Warning */
+    .demo-warning {
+        background: #fef3c7;
+        color: #92400e;
+        border: 1px solid #fbbf24;
+        border-radius: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 0.85rem;
+        margin-top: 1rem;
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .recommendation-card {
+            padding: 1.25rem;
+        }
+        .rec-title {
+            font-size: 1.25rem;
+        }
+        .insight-number {
+            font-size: 2rem;
+        }
+    }
+</style>
 @endpush
 
 @push('scripts')
 <script>
-document.getElementById('btnFetch').addEventListener('click', function(){
+// Mock Data untuk Demo
+const MOCK_DATA = {
+    recommendations: [
+        {
+            title: 'Mengelola Pinjol dengan Bijak',
+            reason: 'Top weak area: utang (weighted gap=91)',
+            expected_benefit: 'Mengurangi risiko keterlambatan pembayaran',
+            peer_insight: { peer_success_rate: 0.64 },
+            scores: { content: 75, collaborative: 40, performance: 62 },
+            scenario_id: 67
+        },
+        {
+            title: 'Menyusun Anggaran Rumah Tangga',
+            reason: 'Top weak area: budgeting (weighted gap=85)',
+            expected_benefit: 'Meningkatkan kemampuan perencanaan keuangan',
+            peer_insight: { peer_success_rate: 0.72 },
+            scores: { content: 82, collaborative: 50, performance: 70 },
+            scenario_id: 45
+        }
+    ]
+};
+
+// Helper Functions
+function getScoreColor(score) {
+    score = parseInt(score) || 0;
+    if (score >= 80) return 'bg-success';
+    if (score >= 60) return 'bg-warning';
+    return 'bg-danger';
+}
+
+function createScoreItem(label, score) {
+    score = parseInt(score) || 0;
+    const colorClass = getScoreColor(score);
+    return `
+        <div class="score-item">
+            <div class="score-label">
+                <span>${label}</span>
+                <span class="font-weight-bold">${score}%</span>
+            </div>
+            <div class="progress-thin">
+                <div class="progress-bar ${colorClass}" style="width: ${score}%"></div>
+            </div>
+        </div>
+    `;
+}
+
+function escapeHtml(s) {
+    return String(s||'').replace(/[&<>"'`=\/]/g, c => ({
+        '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',
+        "'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'
+    })[c]);
+}
+
+function renderRecommendations(data, isDemo = false) {
+    const list = data.recommendations || [];
+    if (!list.length) {
+        return '<div class="alert alert-info"><i class="fa fa-info-circle mr-2"></i>Tidak ada rekomendasi untuk pemain ini.</div>';
+    }
+    
+    let html = '';
+    if (isDemo) {
+        html += '<div class="demo-warning"><i class="fa fa-exclamation-triangle mr-2"></i><strong>Mode Demo:</strong> Data simulasi ditampilkan (backend mungkin tidak tersedia).</div>';
+    }
+    
+    list.forEach(r => {
+        const peer = Math.round((r.peer_insight?.peer_success_rate || 0) * 100);
+        html += `
+        <div class="recommendation-card">
+            <!-- Title -->
+            <h3 class="rec-title">${escapeHtml(r.title)}</h3>
+            
+            <!-- Kuadran Atas: Alasan dan Manfaat -->
+            <div class="row mb-4">
+                <div class="col-md-6 mb-3">
+                    <span class="section-label">Alasan Rekomendasi</span>
+                    <p class="text-muted mb-0">${escapeHtml(r.reason)}</p>
+                </div>
+                <div class="col-md-6 mb-3">
+                    <span class="section-label">Manfaat yang Diharapkan</span>
+                    <p class="text-muted mb-0">${escapeHtml(r.expected_benefit)}</p>
+                </div>
+            </div>
+            
+            <!-- Kuadran Bawah -->
+            <div class="row">
+                <!-- Kuadran Kiri Bawah: Skor Komponen -->
+                <div class="col-lg-7 mb-3">
+                    <div class="info-panel">
+                        <h5 class="font-weight-bold text-secondary mb-3">
+                            <i class="fa fa-chart-bar mr-2"></i>Skor Komponen (Dampak Pembelajaran)
+                        </h5>
+                        ${createScoreItem('Content-Based Score', r.scores?.content)}
+                        ${createScoreItem('Collaborative Score', r.scores?.collaborative)}
+                        ${createScoreItem('Performance Score', r.scores?.performance)}
+                    </div>
+                </div>
+                
+                <!-- Kuadran Kanan Bawah: Peer Insight & Aksi -->
+                <div class="col-lg-5 mb-3">
+                    <div class="info-panel text-center">
+                        <h5 class="font-weight-bold text-secondary mb-3">
+                            <i class="fa fa-users mr-2"></i>Wawasan Rekan (Peer Insight)
+                        </h5>
+                        <div class="insight-number">${peer}%</div>
+                        <p class="insight-text">
+                            Rata-rata Tingkat Keberhasilan Peer
+                            <br><small>Menunjukkan efektivitas skenario ini pada kelompok pemain dengan profil serupa.</small>
+                        </p>
+                        <button class="btn btn-primary rounded-pill mt-2" onclick="viewScenarioDetail(${r.scenario_id})">
+                            <i class="fa fa-eye mr-2"></i>Lihat Detail Skenario
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    });
+    
+    return html;
+}
+
+function viewScenarioDetail(scenarioId) {
+    alert(`Navigasi ke Detail Skenario ID: ${scenarioId}\n\nDalam implementasi nyata, ini akan redirect ke:\n/admin/scenario/${scenarioId}`);
+    // window.location.href = `/admin/scenario/${scenarioId}`;
+}
+
+function selectPlayer(playerId, playerName) {
+    document.getElementById('playerSelect').value = playerId;
+    handlePlayerChange();
+}
+
+// Main Function - dipanggil saat dropdown berubah
+function handlePlayerChange() {
     const select = document.getElementById('playerSelect');
     const playerId = select.value;
-    const playerName = select.options[select.selectedIndex]?.getAttribute('data-name') || playerId;
+    const playerName = select.options[select.selectedIndex]?.text || playerId;
 
-    if(!playerId){ alert('Pilih player terlebih dahulu'); return; }
+    if (!playerId) {
+        document.getElementById('selectedPlayerInfo').innerHTML = '';
+        document.getElementById('recommendationsArea').innerHTML = '';
+        return;
+    }
 
-    // Tampilkan nama player di atas rekomendasi
-    document.getElementById('selectedPlayerInfo').innerHTML =
-        `<strong>Player:</strong> <span class="badge badge-info">${escapeHtml(playerName)}</span> <span class="text-muted ml-2">ID: ${escapeHtml(playerId)}</span>`;
+    // Update Header
+    document.getElementById('selectedPlayerInfo').innerHTML = 
+        `<div class="player-header">
+            <h4 class="mb-0"><i class="fa fa-user mr-2"></i>Rekomendasi untuk: ${escapeHtml(playerName)}</h4>
+        </div>`;
 
     const area = document.getElementById('recommendationsArea');
-    area.innerHTML = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="sr-only">Loading...</span></div><p class="mt-2 text-muted">Memuat rekomendasi untuk <strong>' + playerName + '</strong>...</p></div>';
+    area.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div><p class="mt-2 text-muted">Memuat rekomendasi...</p></div>';
 
+    // Jika p123 (mock data), langsung tampilkan mock data
+    if (playerId === 'p123') {
+        setTimeout(() => {
+            area.innerHTML = renderRecommendations(MOCK_DATA, false);
+        }, 800);
+        return;
+    }
+
+    // Fetch dari API dengan fallback ke demo
     fetch('/recommendation/next', {
         method: 'POST',
         headers: {
@@ -111,59 +330,23 @@ document.getElementById('btnFetch').addEventListener('click', function(){
             'Accept': 'application/json'
         },
         body: JSON.stringify({ player_id: playerId })
-    }).then(r => r.ok ? r.json() : Promise.reject(r))
-      .then(json => {
-          const list = json.recommendations || [];
-          if(!list.length){ area.innerHTML = '<div class="alert alert-info"><i class="fa fa-info-circle mr-2"></i>Tidak ada rekomendasi untuk pemain ini.</div>'; return; }
-          
-          let html = '<div class="row">';
-          list.forEach(r => {
-              const peer = Math.round((r.peer_insight?.peer_success_rate || 0) * 100);
-              html += `
-              <div class="col-md-6 mb-4">
-                  <div class="card card-rekomendasi shadow-sm h-100">
-                      <div class="card-body">
-                          <h5 class="card-title text-primary"><i class="fa fa-graduation-cap mr-2"></i>${escapeHtml(r.title)}</h5>
-                          
-                          <div class="mb-3">
-                              <span class="badge badge-warning"><i class="fa fa-exclamation-circle mr-1"></i>Alasan</span>
-                              <p class="mt-2 mb-0"><strong>${escapeHtml(r.reason)}</strong></p>
-                          </div>
+    })
+    .then(r => r.ok ? r.json() : Promise.reject(r))
+    .then(json => {
+        area.innerHTML = renderRecommendations(json, false);
+    })
+    .catch(error => {
+        console.warn('API Error, falling back to demo data:', error);
+        area.innerHTML = renderRecommendations(MOCK_DATA, true);
+    });
+}
 
-                          <div class="mb-3">
-                              <span class="badge badge-info"><i class="fa fa-users mr-1"></i>Peer Insight</span>
-                              <p class="mt-2 mb-0"><span class="badge-peer">${peer}%</span> kesuksesan peer</p>
-                          </div>
-
-                          <div class="mb-3">
-                              <span class="badge badge-success"><i class="fa fa-star mr-1"></i>Manfaat yang Diharapkan</span>
-                              <p class="mt-2 mb-0">${escapeHtml(r.expected_benefit)}</p>
-                          </div>
-
-                          <div class="mb-3">
-                              <span class="badge badge-secondary"><i class="fa fa-chart-bar mr-1"></i>Skor Komponen</span>
-                              <div class="mt-2">
-                                  <span class="chip">📚 Content: ${r.scores?.content ?? '-'}</span><br class="d-md-none">
-                                  <span class="chip">👥 Collaborative: ${r.scores?.collaborative ?? '-'}</span><br class="d-md-none">
-                                  <span class="chip">⚡ Performance: ${r.scores?.performance ?? '-'}</span>
-                              </div>
-                          </div>
-
-                          <a href="/admin/scenario/${r.scenario_id}" class="btn btn-primary btn-lihat btn-block">
-                              <i class="fa fa-eye mr-2"></i>Lihat Detil Skenario
-                          </a>
-                      </div>
-                  </div>
-              </div>`;
-          });
-          html += '</div>';
-          area.innerHTML = html;
-      })
-      .catch(()=> {
-          area.innerHTML = '<div class="alert alert-danger"><i class="fa fa-exclamation-triangle mr-2"></i>Gagal memuat rekomendasi. Silakan coba lagi.</div>';
-      });
+// Auto-load default player on page load
+window.addEventListener('load', function() {
+    // Auto-trigger untuk player p123 yang sudah terpilih
+    setTimeout(() => {
+        handlePlayerChange();
+    }, 500);
 });
-
-function escapeHtml(s){ return String(s||'').replace(/[&<>"'`=\/]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','/':'&#x2F;','`':'&#x60;','=':'&#x3D;'})[c]); }
 </script>
 @endpush
