@@ -90,6 +90,9 @@ class SessionService
         return $newOrder;
     }
 
+    /**
+     * Mendapatkan Data Sesi untuk Response
+     */
     public function getSessionData($sessionId, $statusMessage)
     {
         $session = GameSession::with('participants')->find($sessionId);
@@ -116,9 +119,9 @@ class SessionService
         ];
     }
 
-    /*
-    
-    */
+    /**
+     * Memperbarui Karakter Pemain
+     */
     public function updatePlayerCharacter(string $playerId, string $characterId) {
         $player = Player::find($playerId);
         if (!$player) {
@@ -131,10 +134,63 @@ class SessionService
         return [ 'ok' => true ];
     }
 
-    /*
-
-    */
+    /**
+     * Mendapatkan URL Avatar berdasarkan ID Karakter
+     */
     private function getAvatarUrlForCharacter(int $id) {
         return "https://api.dicebear.com/7.x/adventurer/svg?seed=Char_" . $id;
+    }
+
+    public function getMatchmakingStatus(string $playerId)
+    {
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', function ($query) {
+                $query->whereIn('status', ['waiting', 'active', 'finished']);
+            })
+            ->first();
+
+        if (!$participation) {
+            return ['error' => 'Player is not in any active lobby/session'];
+        }
+
+        $session = GameSession::with('participants')->find($participation->sessionId);
+        
+        $totalPlayers = $session->participants->count();
+        $readyCount = $session->participants->where('is_ready', true)->count();
+        $maxPlayers = $session->max_players;
+
+        $lobbyStatus = 'waiting_for_players';
+
+        if ($session->status === 'active') {
+            $lobbyStatus = 'session_assigned';
+        } elseif ($totalPlayers >= $maxPlayers) {
+            if ($readyCount >= $totalPlayers) {
+                $lobbyStatus = 'preparing_session';
+            } else {
+                $lobbyStatus = 'waiting_for_ready';
+            }
+        } else {
+            $lobbyStatus = 'waiting_for_players';
+        }
+
+        $playersList = $session->participants->map(function ($p) use ($session) {
+            return [
+                'player_id' => $p->playerId,
+                'username' => $p->player->name ?? 'Unknown Player',
+                'character_id' => $p->player->character_id ?? 1, 
+                'connected' => $p->connection_status === 'connected',
+                'is_ready' => (bool) $p->is_ready,
+                'is_host' => $p->playerId === $session->host_player_id
+            ];
+        });
+
+        return [
+            'status' => $lobbyStatus,
+            'session_id' => $session->sessionId,
+            'ready_count' => $readyCount,
+            'total_players' => $totalPlayers,
+            'max_players' => $maxPlayers,
+            'players' => $playersList
+        ];
     }
 }

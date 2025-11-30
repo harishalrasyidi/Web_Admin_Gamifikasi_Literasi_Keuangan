@@ -58,4 +58,26 @@ class MatchmakingController extends Controller
             return response()->json(['error' => $e->getMessage()], 500);
         }
     }
+
+    public function status(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->getMatchmakingStatus($user->player->PlayerId);
+            
+            // Jika user tidak punya sesi
+            if (isset($result['error'])) {
+                return response()->json($result, 404);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
 }
