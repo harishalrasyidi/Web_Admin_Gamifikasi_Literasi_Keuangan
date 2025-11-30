@@ -10,7 +10,7 @@ class PlayerDecision extends Model
     use HasFactory;
 
     protected $table = 'player_decisions';
-    public $timestamps = false; // Kita isi 'timestamp' manual/default
+    public $timestamps = false;
 
     protected $fillable = [
         'player_id',

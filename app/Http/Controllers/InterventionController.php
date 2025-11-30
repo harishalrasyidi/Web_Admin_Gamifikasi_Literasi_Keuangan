@@ -3,80 +3,40 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use App\Services\InterventionService;
 
 class InterventionController extends Controller
 {
-    /**
-     * API: GET /intervention/trigger
-     * Mengambil pesan intervensi berdasarkan level risiko
-     * Tidak memerlukan parameter - sistem otomatis generate
-     */
-    public function trigger(Request $request)
+    protected $interventionService;
+
+    public function __construct(InterventionService $interventionService)
     {
-        // Untuk demo/testing, generate intervention level secara random
-        // Di production, ini bisa diambil dari session atau context player yang sedang aktif
-
-        $interventionLevel = rand(0, 3);
-
-        // Jika tidak perlu intervensi
-        if ($interventionLevel === 0) {
-            return response()->json([
-                'intervention_id' => null,
-                'intervention_level' => 0,
-                'title' => '',
-                'message' => '',
-                'options' => []
-            ], 200);
-        }
-
-        // Generate intervention ID
-        $interventionId = 'intv_' . uniqid();
-
-        // Generate message berdasarkan level
-        $messages = $this->getInterventionMessage($interventionLevel);
-
-        return response()->json([
-            'intervention_id' => $interventionId,
-            'intervention_level' => $interventionLevel,
-            'title' => $messages['title'],
-            'message' => $messages['message'],
-            'options' => [
-                [
-                    'id' => 'heed',
-                    'text' => 'Lihat Penjelasan Singkat'
-                ],
-                [
-                    'id' => 'ignore',
-                    'text' => 'Lanjut Tanpa Hint'
-                ]
-            ]
-        ], 200);
+        $this->interventionService = $interventionService;
     }
 
     /**
-     * Generate intervention message berdasarkan level
+     * GET /intervention/trigger
      */
-    private function getInterventionMessage($level)
+    public function trigger(Request $request)
     {
-        $messages = [
-            1 => [ // MEDIUM
-                'title' => 'Perhatian',
-                'message' => '💡 Kamu sudah beberapa kali salah berturut-turut. Mungkin perlu review konsep dulu?'
-            ],
-            2 => [ // HIGH
-                'title' => 'Peringatan',
-                'message' => '⚠️ Kamu sudah sering salah di skenario ini. Mungkin perlu review konsep bunga majemuk dulu?'
-            ],
-            3 => [ // CRITICAL
-                'title' => 'Peringatan Serius',
-                'message' => '🛑 Kamu sudah banyak salah berturut-turut! Sangat disarankan untuk belajar konsep dasar sebelum melanjutkan.'
-            ]
-        ];
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
 
-        return $messages[$level] ?? [
-            'title' => 'Info',
-            'message' => 'Tetap semangat belajar!'
-        ];
+        try {
+            $result = $this->interventionService->checkInterventionTrigger($user->player->PlayerId);
+
+            // Jika result NULL, artinya tidak ada intervensi (Aman)
+            // Kita bisa return 204 No Content atau JSON kosong agar frontend tahu tidak ada popup
+            if (!$result) {
+                return response()->json(['status' => 'no_intervention'], 200);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

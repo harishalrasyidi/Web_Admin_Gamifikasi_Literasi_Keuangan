@@ -3,41 +3,59 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use App\Models\AuthUser;
+use App\Services\PlayerService;
 
 class AuthController extends Controller
 {
-    public function showLoginForm()
+    protected $playerService;
+
+    public function __construct(PlayerService $playerService)
     {
-        return view('login');
+        $this->playerService = $playerService;
     }
 
-    public function login(Request $request)
+    /*
+     * Initial State: 
+     * Final State: 
+    */
+    public function google(Request $request)
     {
-        $request->validate([
-            'login' => 'required',
-            'password' => 'required',
+        $data = $request->validate([
+            'google_id_token' => 'required|string',
+            'platform' => 'nullable|string',
+            'locale' => 'nullable|string'
         ]);
 
-        // Cari user
-        $user = AuthUser::where('username', $request->login)->first();
+        try {
+            $result = $this->playerService->loginWithGoogle($data);
+            
+            return response()->json($result, 200);
 
-        if (!$user) {
-            return back()->with('error', 'Username tidak ditemukan.');
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Authentication Failed',
+                'message' => $e->getMessage()
+            ], 401);
         }
+    }
 
-        // Verifikasi password
-        if (!password_verify($request->password, $user->passwordHash)) {
-            return back()->with('error', 'Password salah.');
+    /**
+     * Refresh Token
+     * POST /auth/refresh
+     */
+    public function refresh(Request $request)
+    {
+        $data = $request->validate([
+            'refresh_token' => 'required|string'
+        ]);
+
+        try {
+            $result = $this->playerService->refreshToken($data['refresh_token']);
+            return response()->json($result, 200);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Invalid or Expired Refresh Token'
+            ], 401);
         }
-
-        // Login ke Laravel
-        Auth::login($user);
-
-        // Redirect by role
-        return $user->role === 'admin'
-            ? redirect()->route('admin.dashboard')
-            : redirect()->route('player.dashboard');
     }
 }

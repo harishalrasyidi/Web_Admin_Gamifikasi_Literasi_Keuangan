@@ -12,7 +12,6 @@ class FeedbackRepository
      */
     public function logIntervention(array $data)
     {
-        // Skip logging jika tidak ada session_id (karena kolom NOT NULL)
         if (empty($data['session_id'])) {
             return null;
         }

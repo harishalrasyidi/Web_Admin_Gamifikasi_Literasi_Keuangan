@@ -2,132 +2,352 @@
 
 namespace App\Services;
 
-use App\Models\Session;
+use App\Models\GameSession;
 use App\Models\ParticipatesIn;
 use App\Models\BoardTile;
-use App\Models\Turn;
+use App\Models\Config;
 use App\Models\Player;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\DB; // Untuk transaksi
+use Illuminate\Support\Facades\DB;
 
-class SessionService
-{
-    /**
-     * Implementasi Sequence Diagram: /session/turn/start
-     */
-    public function startTurn(string $sessionId, string $playerId)
-    {
-        $session = Session::findOrFail($sessionId);
+class SessionService {
+    /*
+    * Mengambil status sesi permainan yang sedang diikuti pemain:
+    * mengecek apakah pemain berada di sesi aktif atau masih menunggu,
+    * memuat state permainan (giliran, fase, skor, posisi), lalu
+    * mengembalikan ringkasan lengkap status sesi dalam bentuk array.
+    */
+    public function getSessionState(string $playerId) {
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', function ($query) {
+                $query->whereIn('status', ['active', 'waiting']);
+            })
+            ->with('session.participants')
+            ->first();
 
-        // Validasi Logika Bisnis
-        if ($session->current_player_id !== $playerId) {
-            throw new \Exception("Bukan giliran pemain ini.", 403);
+        if(!$participation) {
+            $lobby = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', fn($q) => $q->where('status', 'waiting'))
+            ->first();
+            
+            if($lobby) {
+                return ['error' => 'Game has not started yet. Please use /matchmaking/status'];
+            }
+
+            return ['error' => 'Player is not in an active session'];
         }
-        if ($session->status === 'turn_started') {
-            throw new \Exception("Giliran sedang berjalan.", 409); // 409 Conflict
+
+        $session = $participation->session;
+        $gameState = json_decode($session->game_state, true) ?? [];
+        $turnPhase = $gameState['turn_phase'] ?? 'waiting';
+
+        $playersData = [];
+        $scoresData = [];
+        $positionsData = [];
+
+        $tiles = BoardTile::pluck('name', 'position_index');
+
+        foreach ($session->participants as $p) {
+            $playersData[] = [
+                'player_id' => $p->playerId,
+                'username' => $p->player->name ?? 'Unknown',
+                'character_id' => $p->player->character_id ?? 1,
+                'connected' => $p->connection_status === 'connected',
+                'is_ready' => (bool) $p->is_ready
+            ];
+
+            $pScore = $gameState['scores'][$p->playerId] ?? [
+                "pendapatan" => 0,
+                "anggaran" => 0,
+                "tabungan" => 0,
+                "utang" => 0,
+                "investasi" => 0,
+                "asuransi" => 0,
+                "tujuan_jangka_panjang" => 0,
+                "overall" => $p->score
+            ];
+            $scoresData[] = $pScore;
+
+            $tileName = $tiles[$p->position] ?? 'Start';
+            $positionsData[] = [
+                'tile_id' => $p->position,
+                'tile_name' => $tileName
+            ];
         }
 
-        // Buat record giliran baru
-        $turn = Turn::create([
-            'turn_id' => 'turn_' . Str::uuid(),
-            'session_id' => $sessionId,
-            'player_id' => $playerId,
-            'turn_number' => $session->turn_index + 1,
-        ]);
+        $currentPlayerName = 'None';
+        if ($session->current_player_id) {
+            $currentPlayer = $session->participants->firstWhere('playerId', $session->current_player_id);
+            $currentPlayerName = $currentPlayer ? $currentPlayer->player->name : 'Unknown';
+        }
 
-        // Update status sesi
-        $session->status = 'turn_started';
-        $session->save();
-
-        return $turn; // Kembalikan data giliran
-    }
-
-    /**
-     * Implementasi Sequence Diagram: /session/player/move
-     */
-    public function movePlayer(string $sessionId, string $playerId, int $fromTile, int $steps): array
-    {
-        // 1. Logika Bisnis: Hitung posisi baru
-        $newPosition = ($fromTile + $steps) % 40; // Asumsi 40 petak
-
-        // 2. Panggil Repository (Eloquent) -> Update DB `ParticipatesIn`
-        ParticipatesIn::where('sessionId', $sessionId)
-            ->where('playerId', $playerId)
-            ->update(['position' => $newPosition]);
-
-        // 3. Panggil Repository (Eloquent) -> Baca DB `board_tiles`
-        $tile = BoardTile::where('position', $newPosition)->firstOrFail();
-
-        // 4. Kembalikan data sesuai spesifikasi
         return [
-            'from_tile' => $fromTile,
-            'to_tile' => $newPosition,
-            'tile_type' => $tile->type, 
-            'next_action' => ['related_id' => $tile->related_id] // (ID skenario/kuis/dll)
+            "session_id" => $session->sessionId,
+            "status" => $session->status,
+            "current_turn_player_id" => $session->current_player_id,
+            "current_turn_player_name" => $currentPlayerName,
+            "turn_phase" => $turnPhase,
+            "turn_number" => $session->current_turn,
+            "players" => $playersData,
+            "scores" => $scoresData,
+            "positions" => $positionsData
         ];
     }
 
     /**
-     * Implementasi Sequence Diagram: /session/turn/end
+     * Memulai giliran pemain dalam sesi aktif: memastikan pemain berada
+     * di sesi yang benar, mengecek apakah memang gilirannya, lalu
+     * mengatur fase giliran ke 'waiting' dan mengembalikan status giliran.
      */
-    public function endTurn(string $sessionId, string $playerId, string $turnId, array $actions = [])
+    public function startTurn(string $playerId)
     {
-        // Gunakan Transaksi Database untuk memastikan semua update berhasil
-        return DB::transaction(function () use ($sessionId, $playerId, $turnId, $actions) {
-            // 1. Update data giliran (Turn)
-            $turn = Turn::findOrFail($turnId);
-            $turn->end_time = now();
-            $turn->save();
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', function ($query) {
+                $query->where('status', 'active');
+            })
+            ->first();
 
-            // 2. (Opsional) Catat 'actions' ke tabel Telemetry
-            // ... (logika untuk menyimpan 'actions' ke tabel 'telemetry') ...
+        if (!$participation) {
+            return ['error' => 'Player is not in an active session'];
+        }
 
-            // 3. Tentukan pemain selanjutnya
-            $session = Session::with('players')->findOrFail($sessionId); // Muat relasi players
-            $playerCount = $session->players->count();
+        $session = $participation->session;
+
+        if ($session->current_player_id !== $playerId) {
+            return ['error' => 'It is not your turn yet'];
+        }
+
+        $gameState = json_decode($session->game_state, true) ?? [];
+        $gameState['turn_phase'] = 'waiting';
+        
+        $session->game_state = json_encode($gameState);
+        $session->save();
+
+        return [
+            'turn_phase' => 'waiting',
+            'turn_number' => $session->current_turn
+        ];
+    }
+
+    /**
+     * Mengocok dadu untuk pemain dalam sesi aktif:
+     * memverifikasi giliran dan fase, menghasilkan nilai dadu acak,
+     * memperbarui fase giliran ke 'rolling', lalu mengembalikan hasilnya.
+     */
+    public function rollDice(string $playerId)
+    {
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', fn($q) => $q->where('status', 'active'))
+            ->first();
+
+        if (!$participation) {
+            return ['error' => 'Player is not in an active session'];
+        }
+
+        $session = $participation->session;
+
+        if ($session->current_player_id !== $playerId) {
+            return ['error' => 'It is not your turn'];
+        }
+
+        $gameState = json_decode($session->game_state, true) ?? [];
+        $currentPhase = $gameState['turn_phase'] ?? 'waiting';
+
+        if ($currentPhase !== 'waiting') {
+            return ['error' => "Cannot roll dice in '$currentPhase' phase. Please wait or check state."];
+        }
+
+        $diceValue = rand(1, 6);
+
+        $gameState['turn_phase'] = 'rolling';
+        $gameState['last_dice'] = $diceValue;
+        
+        $session->game_state = json_encode($gameState);
+        $session->save();
+
+        return [
+            'turn_phase' => 'rolling',
+            'dice_value' => $diceValue
+        ];
+    }
+
+    /**
+     * Memindahkan pemain berdasarkan nilai dadu terakhir:
+     * memverifikasi giliran dan fase, menghitung posisi baru,
+     * memperbarui posisi pemain dan fase giliran, lalu mengembalikan detail pergerakan.
+     */
+    public function movePlayer(string $playerId)
+    {
+        return DB::transaction(function () use ($playerId) {
+            $participation = ParticipatesIn::where('playerId', $playerId)
+                ->whereHas('session', fn($q) => $q->where('status', 'active'))
+                ->with('session')
+                ->lockForUpdate()
+                ->first();
+
+            if (!$participation) {
+                return ['error' => 'Player is not in an active session'];
+            }
+
+            $session = $participation->session;
+
+            if ($session->current_player_id !== $playerId) {
+                return ['error' => 'It is not your turn'];
+            }
+
+            $gameState = json_decode($session->game_state, true) ?? [];
+            $currentPhase = $gameState['turn_phase'] ?? 'waiting';
+
+            if ($currentPhase !== 'rolling') {
+                return ['error' => "Cannot move in '$currentPhase' phase. You need to roll dice first."];
+            }
+
+            $diceValue = $gameState['last_dice'] ?? 0;
+            if ($diceValue == 0) {
+                return ['error' => 'Dice value invalid. Please roll again.'];
+            }
+
+            $currentPosition = $participation->position;
             
-            $nextTurnIndex = ($session->turn_index + 1) % $playerCount;
-            $nextPlayer = $session->players[$nextTurnIndex];
-            
-            // 4. Update Sesi
-            $session->turn_index = $nextTurnIndex;
-            $session->current_player_id = $nextPlayer->PlayerId;
-            $session->status = 'turn_pending'; // Menunggu pemain selanjutnya
+            $totalTiles = BoardTile::count();
+            if ($totalTiles == 0) $totalTiles = 20;
+
+            $newPosition = ($currentPosition + $diceValue) % $totalTiles;
+
+            if ($newPosition < $currentPosition) {
+                // Logika "Pass Go" (Dapat uang) bisa ditaruh di sini
+                // $participation->score += 200;
+                
+            }
+
+            $gameState['prev_position'] = $currentPosition;
+            $participation->position = $newPosition;
+            $participation->save();
+
+            $gameState['turn_phase'] = 'moving';
+            $session->game_state = json_encode($gameState);
             $session->save();
 
             return [
-                'next_player_id' => $nextPlayer->PlayerId,
-                'next_turn_index' => $nextTurnIndex
+                'turn_phase' => 'moving',
+                'from_tile' => $currentPosition,
+                'to_tile' => $newPosition
             ];
         });
     }
-    
+
     /**
-     * Implementasi Sequence Diagram: /session/end
+     * Mengambil informasi giliran saat ini untuk pemain yang diautentikasi:
+     * memverifikasi partisipasi di sesi aktif, memuat state permainan,
+     * lalu mengembalikan detail giliran termasuk pemain saat ini dan aksi terakhir.
      */
-    public function endSession(string $sessionId)
+    public function getCurrentTurn(string $playerId)
     {
-        return DB::transaction(function () use ($sessionId) {
-            // 1. Update status sesi
-            $session = Session::findOrFail($sessionId);
-            $session->status = 'finished';
-            $session->ended_at = now();
-            $session->save();
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', fn($q) => $q->where('status', 'active'))
+            ->with(['session.participants'])
+            ->first();
 
-            // 2. Ambil ranking akhir
-            $rankings = ParticipatesIn::where('sessionId', $sessionId)
-                            ->orderBy('score', 'desc')
-                            ->get();
-            
-            // 3. Update 'gamesPlayed' di tabel 'players'
-            $playerIds = $rankings->pluck('playerId');
-            Player::whereIn('PlayerId', $playerIds)->increment('gamesPlayed');
+        if (!$participation) {
+            return ['error' => 'Player is not in an active session'];
+        }
 
-            return [
-                'sessionId' => $sessionId,
-                'status' => 'finished',
-                'rankings' => $rankings
-            ];
+        $session = $participation->session;
+        $gameState = json_decode($session->game_state, true) ?? [];
+
+        $currentPlayerId = $session->current_player_id;
+        $currentPlayerName = 'Unknown';
+        $currentParticipant = $session->participants->firstWhere('playerId', $currentPlayerId);
+        
+        if ($currentParticipant) {
+            $currentPlayerName = $currentParticipant->player->name;
+            $currentPos = $currentParticipant->position;
+        } else {
+            $currentPos = 0;
+        }
+
+        $tile = BoardTile::where('position_index', $currentPos)->first();
+        
+        $eventType = 'none';
+        $eventId = null;
+
+        if ($tile) {
+            $eventType = $tile->type;
+            $linkedContent = json_decode($tile->linked_content, true);
+            $eventId = $linkedContent['id'] ?? $tile->tile_id;
+        }
+
+        $actionData = [
+            'dice_value' => $gameState['last_dice'] ?? 0,
+            'from_tile' => $gameState['prev_position'] ?? ($currentPos - ($gameState['last_dice'] ?? 0)),
+            'to_tile' => $currentPos,
+            'landed_event_type' => $eventType,
+            'landed_event_id' => $eventId
+        ];
+
+        if ($actionData['from_tile'] < 0) {
+            $totalTiles = BoardTile::count() ?: 20;
+            $actionData['from_tile'] += $totalTiles;
+        }
+
+        return [
+            'turn_number' => $session->current_turn,
+            'turn_phase' => $gameState['turn_phase'] ?? 'waiting',
+            'current_turn_player' => $currentPlayerName,
+            'current_turn_player_id' => $currentPlayerId,
+            'current_turn_action' => $actionData
+        ];
+    }
+
+    /**
+     * Mengakhiri giliran pemain dalam sesi aktif:
+     * memverifikasi giliran dan fase, menentukan pemain berikutnya,
+     * memperbarui giliran dan fase, lalu mengembalikan detail giliran berikutnya.
+     */
+    public function endTurn(string $playerId)
+    {
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', fn($q) => $q->where('status', 'active'))
+            ->with(['session.participants'])
+            ->first();
+
+        if (!$participation) {
+            return ['error' => 'Player is not in an active session'];
+        }
+
+        $session = $participation->session;
+
+        if ($session->current_player_id !== $playerId) {
+            return ['error' => 'It is not your turn to end'];
+        }
+
+        $participants = $session->participants->sortBy('player_order')->values();
+        
+        $currentIndex = $participants->search(function ($p) use ($playerId) {
+            return $p->playerId === $playerId;
         });
+
+        if ($currentIndex === false) {
+            return ['error' => 'Player participation data error'];
+        }
+
+        $nextIndex = ($currentIndex + 1) % $participants->count();
+        $nextPlayer = $participants[$nextIndex];
+
+        $session->current_player_id = $nextPlayer->playerId;
+        $session->current_turn += 1;
+
+        $gameState = json_decode($session->game_state, true) ?? [];
+        $gameState['turn_phase'] = 'waiting';
+        $gameState['last_dice'] = 0;
+        
+        $session->game_state = json_encode($gameState);
+        $session->save();
+
+        return [
+            'turn_phase' => 'completed',
+            'next_turn_player_id' => $nextPlayer->playerId,
+            'turn_number' => $session->current_turn
+        ];
     }
 }

@@ -9,18 +9,21 @@ class QuizCard extends Model
 {
     use HasFactory;
 
-    // Tentukan tabel jika namanya beda (sesuai glk_db_final.sql)
-    protected $table = 'quiz_cards'; 
+    protected $table = 'quiz_cards';
 
     protected $primaryKey = 'id';
+    public $incrementing = false;
+    protected $keyType = 'string';
+    protected $fillable = [
+        'id', 'question', 'correctOption', 'correctScore', 'incorrectScore', 
+        'tags', 'difficulty', 'learning_objective'
+    ];
+    protected $casts = [
+        'tags' => 'array'
+    ];
 
-    /**
-     * (WAJIB DITAMBAHKAN)
-     * Mendefinisikan relasi ke opsi-opsi kuis.
-     */
     public function options()
     {
-        // 'quizId' adalah foreign key di tabel 'quiz_options'
-        return $this->hasMany(QuizOption::class, 'quizId');
+        return $this->hasMany(QuizOption::class, 'quizId', 'id');
     }
 }

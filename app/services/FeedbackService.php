@@ -2,33 +2,47 @@
 
 namespace App\Services;
 
+use App\Models\ParticipatesIn;
+use App\Models\PlayerDecision;
 use App\Repositories\FeedbackRepository;
 use App\Services\ThresholdService;
+use Illuminate\Support\Facades\Log;
 
 class FeedbackService
 {
     protected $feedbackRepo;
     protected $thresholdService;
 
-    // Inject ThresholdService agar kita bisa update threshold dari sini
-    public function __construct(FeedbackRepository $feedbackRepo, ThresholdService $thresholdService)
+    /*
+     * Konstruktor untuk inisialisasi repository dan service terkait
+    */
+    public function storeInterventionFeedback(string $playerId, array $data)
     {
-        $this->feedbackRepo = $feedbackRepo;
-        $this->thresholdService = $thresholdService;
-    }
+        $participation = ParticipatesIn::where('playerId', $playerId)
+            ->whereHas('session', function ($query) {
+                $query->whereIn('status', ['active', 'waiting']);
+            })
+            ->with('session')
+            ->first();
 
-    public function processFeedback(array $data)
-    {
-        // 1. Selalu Catat Log
-        $this->feedbackRepo->logIntervention($data);
+        $sessionId = $participation ? $participation->sessionId : 'unknown_session';
+        $turnNumber = $participation ? ($participation->session->current_turn ?? 0) : 0;
 
-        // 2. Jika butuh update threshold, bisa ditambahkan logic di sini
-        // Contoh: jika player_response = 'ignored', tingkatkan sensitivitas
-        // (Opsional, sesuai kebutuhan business logic)
+        PlayerDecision::create([
+            'player_id' => $playerId,
+            'session_id' => $sessionId,
+            'turn_number' => $turnNumber,
+            'content_id' => $data['scenario_id'] ?? 'general',
+            'content_type' => 'intervention_log',
+            'intervention_id' => $data['intervention_id'],
+            'player_response' => $data['player_response'],
+            'is_correct' => 0,
+            'score_change' => 0,
+            'created_at' => now()
+        ]);
 
-        return [
-            'logged' => true,
-            'effectiveness_updated' => false
-        ];
+        Log::info("Feedback stored for player {$playerId}: Intervention {$data['intervention_id']} was {$data['player_response']}");
+
+        return ['ok' => true];
     }
 }

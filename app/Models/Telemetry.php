@@ -15,8 +15,8 @@ class Telemetry extends Model
     protected $fillable = [
         'sessionId',
         'playerId',
-        'turn_id', 
-        'tile_id',  // <--- TAMBAHKAN INI
+        'turn_id',
+        'tile_id',
         'action',
         'details',
         'metadata',

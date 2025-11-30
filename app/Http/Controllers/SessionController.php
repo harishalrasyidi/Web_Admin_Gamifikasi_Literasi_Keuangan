@@ -2,50 +2,167 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\SessionService;
-use App\Http\Requests\StartTurnRequest;
-use App\Http\Requests\MovePlayerRequest;
-use App\Http\Requests\EndTurnRequest;
-use App\Http\Requests\EndSessionRequest; // (Jika Anda buat, atau validasi manual)
 use Illuminate\Http\Request;
+use App\Services\SessionService;
 
 class SessionController extends Controller
 {
-    // Suntikkan (inject) Service
-    public function __construct(protected SessionService $sessionService)
-    {
+    protected $sessionService;
+    public function __construct(SessionService $sessionService)
+        {
+            $this->sessionService = $sessionService;
+        }
+
+    /**
+     * Retrieve the current state of the game session for the authenticated player.
+     */
+    public function state(Request $request){
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->getSessionState($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                if (str_contains($result['error'], 'not started')) {
+                    return response()->json($result, 409);
+                }
+                return response()->json($result, 404);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
-    public function startTurn(StartTurnRequest $request)
-    {
-        $data = $request->validated();
-        $turn = $this->sessionService->startTurn($data['sessionId'], $data['playerId']);
-        return response()->json($turn, 201); // 201 Created
+    /**
+     * Handle ping requests to check server status.
+     */
+    public function ping(Request $request){
+        return response()->json([
+                'status' => 'ok',
+                'server_time' => now()->toIso8601String()
+            ]);
     }
 
-    public function movePlayer(MovePlayerRequest $request)
+    /**
+     * Handle starting the player's turn.
+     */
+    public function startTurn(Request $request)
     {
-        $data = $request->validated();
-        $result = $this->sessionService->movePlayer(
-            $data['sessionId'], $data['playerId'], $data['from_tile'], $data['steps']
-        );
-        return response()->json($result);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->startTurn($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 400);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
-    public function endTurn(EndTurnRequest $request)
+    /**
+     * Handle rolling the dice for the player's turn.
+     */
+    public function roll(Request $request)
     {
-        $data = $request->validated();
-        $result = $this->sessionService->endTurn(
-            $data['sessionId'], $data['playerId'], $data['turn_id'], $data['actions'] ?? []
-        );
-        return response()->json($result);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->rollDice($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 400);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 
-    public function endSession(Request $request, $sessionId) // Contoh jika ID dari URL
+    /**
+     * Handle moving the player based on the last rolled dice.
+     */
+    public function move(Request $request)
     {
-        // $data = $request->validate(['sessionId' => 'required|...']);
-        // $result = $this->sessionService->endSession($data['sessionId']);
-        $result = $this->sessionService->endSession($sessionId);
-        return response()->json($result);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->movePlayer($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 400);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Retrieve the current turn information for the authenticated player.
+     */
+    public function currentTurn(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->getCurrentTurn($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 404);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function endTurn(Request $request)
+    {
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            $result = $this->sessionService->endTurn($user->player->PlayerId);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 400);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

@@ -18,7 +18,6 @@ class ThresholdController extends Controller
 
     public function getThresholds(Request $request)
     {
-        // ... (Kode lama Anda tetap di sini) ...
         $validator = Validator::make($request->all(), [
             'player_id' => 'required|string|exists:players,PlayerId'
         ]);
@@ -37,7 +36,6 @@ class ThresholdController extends Controller
         return response()->json($data);
     }
 
-    // --- FUNGSI BARU: IMPLEMENTASI API 30 (POST /threshold/update) ---
     public function update(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -56,7 +54,6 @@ class ThresholdController extends Controller
             $validated['reason'] ?? null 
         );
 
-        // Kembalikan data terbaru sebagai konfirmasi
         $newData = $this->thresholdService->getPlayerThresholds($request->input('player_id'));
         
         return response()->json($newData);

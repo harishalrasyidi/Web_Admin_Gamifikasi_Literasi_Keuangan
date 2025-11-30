@@ -22,16 +22,12 @@ class ProfilingController extends Controller
      */
     public function status(Request $request)
     {
-        $playerId = $request->query('player_id');
-        
-        if (!$playerId) {
-            return response()->json([
-                'error' => 'player_id is required'
-            ], 400);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player data not found'], 404);
         }
-
+        $playerId = $user->player->PlayerId;
         $result = $this->profilingService->getProfilingStatus($playerId);
-
         return response()->json($result);
     }
 
@@ -40,17 +36,35 @@ class ProfilingController extends Controller
      */
     public function submit(ProfilingSubmitRequest $request)
     {
-        $result = $this->profilingService->saveOnboardingAnswers($request->validated());
-        return response()->json($result);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player not found'], 404);
+        }
+        $playerId = $user->player->PlayerId;
+        $validatedData = $request->validated();
+        $this->profilingService->saveOnboardingAnswers([
+            'player_id' => $playerId,
+            'answers' => $validatedData['answers'],
+            'profiling_done' => $validatedData['profiling_done'] ?? false 
+        ]);
+        return response()->json(['ok' => true]);
     }
 
     /**
      * Menjalankan proses clustering profiling untuk player tertentu.
      */
-    public function cluster($playerId)
+    public function cluster(Request $request)
     {
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player not found'], 404);
+        }
+        $playerId = $user->player->PlayerId;
+    
         $result = $this->profilingService->runProfilingCluster($playerId);
-        return response()->json($result);
+        if (isset($result['error'])) {
+            return response()->json($result, 400);
+        }
+        return response()->json($result, 200);
     }
-
 }

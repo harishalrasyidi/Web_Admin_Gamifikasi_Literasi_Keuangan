@@ -11,41 +11,46 @@ class ProfilingService
 {
     protected $fuzzy;
     protected $ann;
-    protected $cosine;
 
     private const CLUSTER_PROFILES = [
         'Financial Novice' => [
-            'level' => 'critical',
-            'traits' => ['unaware', 'vulnerable', 'reactive'],
-            'weak_areas' => ['pendapatan', 'anggaran', 'utang', 'tabungan_dan_dana_darurat'],
-            'recommended_focus' => ['basic_budgeting', 'debt_avoidance']
+            'display_name' => 'HIGH RISK PLAYER',
+            'level' => 'Critical',
+            'traits' => ['Impulsive', 'FOMO-driven'],
+            'weak_areas' => ['Utang', 'Tabungan', 'Tujuan Jangka Panjang'],
+            'recommended_focus' => ['Basic Budgeting', 'Debt Management']
         ],
         'Financial Explorer' => [
-            'level' => 'high_risk',
-            'traits' => ['impulsive', 'fomo_driven', 'experimental'],
-            'weak_areas' => ['utang', 'anggaran', 'tujuan_jangka_panjang'],
-            'recommended_focus' => ['debt_management', 'risk_awareness']
+            'display_name' => 'MODERATE RISK PLAYER',
+            'level' => 'High',
+            'traits' => ['Experimental', 'Overconfident'],
+            'weak_areas' => ['Investasi', 'Anggaran'],
+            'recommended_focus' => ['Risk Awareness', 'Diversification']
         ],
         'Foundation Builder' => [
-            'level' => 'moderate',
-            'traits' => ['saver', 'cautious', 'planner'],
-            'weak_areas' => ['investasi', 'asuransi_dan_proteksi'],
-            'recommended_focus' => ['intro_to_investing', 'emergency_fund']
+            'display_name' => 'CAUTIOUS PLAYER',
+            'level' => 'Medium',
+            'traits' => ['Conservative', 'Saver'],
+            'weak_areas' => ['Investasi', 'Pertumbuhan Aset'],
+            'recommended_focus' => ['Investment Basics', 'Inflation Protection']
         ],
         'Financial Architect' => [
-            'level' => 'stable',
-            'traits' => ['proactive', 'investor', 'optimizer'],
-            'weak_areas' => ['investment_optimization', 'tax_efficiency'],
-            'recommended_focus' => ['advanced_investing', 'portfolio_diversification']
+            'display_name' => 'STRATEGIC PLAYER',
+            'level' => 'Low',
+            'traits' => ['Planner', 'Optimizer'],
+            'weak_areas' => ['Optimasi Pajak', 'Estate Planning'],
+            'recommended_focus' => ['Advanced Portfolio', 'Tax Efficiency']
         ],
         'Financial Sage' => [
-            'level' => 'secure',
-            'traits' => ['strategic', 'disciplined', 'legacy_focused'],
-            'weak_areas' => ['estate_planning', 'wealth_transfer'],
-            'recommended_focus' => ['estate_planning', 'advanced_wealth_strategy']
+            'display_name' => 'SECURE PLAYER',
+            'level' => 'Safe',
+            'traits' => ['Mentor', 'Philanthropist'],
+            'weak_areas' => [],
+            'recommended_focus' => ['Legacy Planning', 'Wealth Transfer']
         ],
         'default' => [
-            'level' => 'unknown',
+            'display_name' => 'UNKNOWN PLAYER',
+            'level' => 'Unknown',
             'traits' => [],
             'weak_areas' => [],
             'recommended_focus' => []
@@ -60,9 +65,9 @@ class ProfilingService
         $this->ann = $ann;
     }
 
-        /**
-     * Mendapatkan status profiling untuk pemain tertentu.
-     */
+    /**
+     * Mengecek status profiling pemain berdasarkan data yang tersimpan.
+    */
     public function getProfilingStatus(string $playerId)
     {
         $profile = PlayerProfile::find($playerId);
@@ -71,7 +76,8 @@ class ProfilingService
             return [
                 'player_id' => $playerId,
                 'status' => 'needed',
-                'message' => 'Player profile record not found.'
+                'profiling_done' => false,
+                'cluster' => null
             ];
         }
 
@@ -79,9 +85,10 @@ class ProfilingService
             return [
                 'player_id' => $playerId,
                 'status' => 'completed',
+                'profiling_done' => true,
                 'cluster' => $profile->cluster,
                 'level' => $profile->level,
-                'timestamp' => $profile->last_updated
+                'last_updated' => $profile->last_updated
             ];
         }
         
@@ -89,36 +96,43 @@ class ProfilingService
             return [
                 'player_id' => $playerId,
                 'status' => 'processing',
+                'profiling_done' => false,
                 'message' => 'Answers received, waiting for calculation.'
             ];
         }
 
         return [
-            'player_id' => $playerId,
-            'status' => 'needed',
-            'message' => 'Player needs to submit onboarding answers.'
+            'profiling_done' => false,
+            'cluster' => null
         ];
     }
     
+    /**
+     * Menyimpan jawaban onboarding pemain dan, bila diminta,
+     * memicu proses profiling (clustering) secara otomatis.
+     */
     public function saveOnboardingAnswers(array $input)
     {
-        $player = PlayerProfile::updateOrCreate(
+        PlayerProfile::updateOrCreate(
             ['PlayerId' => $input['player_id']],
             [
                 'onboarding_answers' => json_encode($input['answers']),
-                'locale' => $input['locale'],
                 'last_updated' => now(),
             ]
         );
-
-        return [
-            'player_id' => $input['player_id'],
-            'onboarding_answers' => $input['answers'],
-            'platform' => $input['platform'],
-            'status' => 'recorded',
-            'session_id' => $input['session_id'],
-        ];
+        if (!empty($input['profiling_done']) && $input['profiling_done'] === true) {
+            try {
+                $this->runProfilingCluster($input['player_id']);
+            } catch (\Exception $e) {
+                \Log::error("Profiling calculation failed for {$input['player_id']}: " . $e->getMessage());
+            }
+        }
+        return ['ok' => true ];
     }
+
+    /**
+     * Menjalankan proses profiling (clustering) untuk seorang pemain.
+    */
     public function runProfilingCluster(string $playerId)
     {
         $input = ProfilingInput::where('player_id', $playerId)->latest()->first();
@@ -132,7 +146,7 @@ class ProfilingService
         $profileData = self::CLUSTER_PROFILES[$finalClass] ?? self::CLUSTER_PROFILES['default'];
 
         PlayerProfile::where('PlayerId', $playerId)->update([
-            'cluster' => $finalClass,
+            'cluster' => $profileData['display_name'],
             'level' => $profileData['level'],
             'traits' => json_encode($profileData['traits']),
             'weak_areas' => json_encode($profileData['weak_areas']),
@@ -142,15 +156,11 @@ class ProfilingService
         ]);
 
         return [
-            'player_id' => $playerId,
             'cluster' => $finalClass,
             'level' => $profileData['level'],
             'traits' => $profileData['traits'],
             'weak_areas' => $profileData['weak_areas'],
             'recommended_focus' => $profileData['recommended_focus'],
-            'confidence_level' => $this->ann->getConfidence(),
-            'profiling_version' => 2,
-            'generated_at' => now()->toISOString(),
         ];
     }
 }

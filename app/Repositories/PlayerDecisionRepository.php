@@ -8,7 +8,6 @@ class PlayerDecisionRepository
 {
     public function store(array $data)
     {
-        // Pastikan nilai default jika tidak ada
         return PlayerDecision::create(array_merge([
             'content_type' => 'scenario',
             'turn_number' => 0,

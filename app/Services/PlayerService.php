@@ -2,61 +2,145 @@
 
 namespace App\Services;
 
+use App\Models\User;
 use App\Models\Player;
 use App\Models\PlayerProfile;
-// use App\Services\AIEngineService; // (Nanti Anda akan impor AI Engine di sini)
+use App\Models\AuthToken;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\DB;
+use Google_Client;
 
 class PlayerService
 {
-    // protected $aiEngine;
-    
-    // public function __construct(AIEngineService $aiEngine)
-    // {
-    //     $this->aiEngine = $aiEngine;
-    // }
-
     /**
-     * Ambil data profil lengkap seorang pemain.
+     * Menangani Login dengan Google
+     * Sesuai API Versi 3: POST /auth/google
      */
-    public function getPlayerProfile(string $playerId)
+    public function loginWithGoogle(array $data)
     {
-        // Panggil Repository (Eloquent)
-        // Muat relasi 'profile' yang sudah kita buat
-        return Player::with('profile')->findOrFail($playerId);
+        $idToken = $data['google_id_token'];
+        $platform = $data['platform'] ?? 'web';
+        $locale = $data['locale'] ?? 'id_ID';
+
+        $googleId = 'google_id_tester_001'; 
+        $name = 'Tester Postman';
+        $avatar = 'https://ui-avatars.com/api/?name=Tester+Postman';
+        
+        /*
+        $client = new Google_Client(['client_id' => env('GOOGLE_CLIENT_ID')]);
+        try {
+            $payload = $client->verifyIdToken($idToken);
+        } catch (\Exception $e) {
+            $payload = false;
+        }
+
+        if (!$payload) {
+             throw new \Exception("Invalid Google Token (Wrong format or expired)");
+        }
+        $googleId = $payload['sub'];
+        $email = $payload['email'];
+        $name = $payload['name'];
+        $avatar = $payload['picture'] ?? null;
+        */
+        
+        return DB::transaction(function () use ($googleId, $name, $avatar, $platform, $locale) {
+            $user = User::firstOrCreate(
+                ['google_id' => $googleId],
+                [
+                    'username' => $name,
+                    'role' => 'player',
+                    'avatar' => $avatar,
+                    'passwordHash' => null
+                ]
+            );
+
+            $isNewUser = $user->wasRecentlyCreated;
+
+            $player = Player::firstOrCreate(
+                ['user_id' => $user->id],
+                [
+                    'PlayerId' => 'player_' . Str::random(8),
+                    'name' => $name,
+                    'avatar_url' => $avatar,
+                    'initial_platform' => $platform,
+                    'locale' => $locale,
+                    'gamesPlayed' => 0,
+                    'createdAt' => now()
+                ]
+            );
+
+            if ($player->wasRecentlyCreated) {
+                PlayerProfile::create([
+                    'PlayerId' => $player->PlayerId,
+                    'cluster' => null,
+                    'confidence_level' => 0.0,
+                    'lifetime_scores' => json_encode([]),
+                    'thresholds' => json_encode(["critical" => 0.30, "high" => 0.50, "medium" => 0.70]),
+                    'last_updated' => now(),
+                ]);
+            }
+            return $this->generateTokens($user, $player, $isNewUser);
+        });
     }
 
     /**
-     * Proses jawaban profiling, panggil AI, dan simpan profil.
+     * Logika Generate Token Lengkap (Access + Refresh)
+     * Update fungsi loginWithGoogle Anda untuk memanggil ini
      */
-    public function submitProfiling(string $playerId, array $answers)
+    private function generateTokens($user, $player, $isNewUser = false)
     {
-        // 1. Panggil AI Engine (Sistem Profiling Cepat dari Paten)
-        // (Untuk sekarang, kita buat MOCK/dummy)
-        // $cluster = $this->aiEngine->calculateCluster($answers);
-        $mockCluster = 'Risk_Averse_Novice'; // HANYA CONTOH MOCK
+        $accessToken = $user->createToken('game-client')->plainTextToken;
+        $refreshTokenString = Str::random(60);
+        
+        DB::table('auth_tokens')->insert([
+            'token' => $refreshTokenString,
+            'type' => 'refresh',
+            'userId' => $user->id,
+            'expiresAt' => now()->addDays(30),
+            'created_at' => now()
+        ]);
 
-        // 2. Siapkan data untuk disimpan
-        $profileData = [
-            'onboarding_answers' => $answers,
-            'cluster' => $mockCluster,
-            'level' => 'Beginner',
-            // Inisialisasi skor JSON agar tidak null
-            'lifetime_scores' => [
-                'Utang' => 0,
-                'Investasi' => 0,
-                'Tabungan' => 0,
-                // ...kategori lain...
-            ]
+        return [
+            'access_token' => $accessToken,
+            'refresh_token' => $refreshTokenString,
+            'token_type' => 'Bearer',
+            'expires_in' => 3600, 
+            'player_id' => $player->PlayerId,
+            'username' => $player->name,
+            'auth_status' => 'ok',
+            'is_new_user' => $isNewUser
         ];
+    }
 
-        // 3. Panggil Repository (Eloquent)
-        // updateOrCreate akan mencari PlayerId, 
-        // jika ada di-update, jika tidak ada di-create.
-        $profile = PlayerProfile::updateOrCreate(
-            ['PlayerId' => $playerId], // Kunci pencarian
-            $profileData                 // Data untuk di-update/create
-        );
+    /**
+     * Endpoint: POST /auth/refresh
+     */
+    public function refreshToken($refreshTokenInput)
+    {
+        $tokenRecord = DB::table('auth_tokens')
+            ->where('token', $refreshTokenInput)
+            ->where('type', 'refresh')
+            ->first();
 
-        return $profile;
+        if (!$tokenRecord) {
+            throw new \Exception("Token not found");
+        }
+
+        if (now()->gt($tokenRecord->expiresAt)) {
+            DB::table('auth_tokens')->where('token', $refreshTokenInput)->delete();
+            throw new \Exception("Token expired");
+        }
+
+        $user = User::find($tokenRecord->userId);
+        if (!$user) throw new \Exception("User not found");
+        
+        $player = $user->player;
+
+        $newAccessToken = $user->createToken('game-client')->plainTextToken;
+
+        return [
+            'access_token' => $newAccessToken,
+            'expires_in' => 3600
+        ];
     }
 }
