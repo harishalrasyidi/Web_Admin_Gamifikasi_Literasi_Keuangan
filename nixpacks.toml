@@ -1,13 +1,15 @@
-# Gunakan providers agar Nixpacks otomatis mengatur PHP & Node.js tanpa konflik
+# 1. Gunakan providers untuk PHP dan Node.js (Otomatis handle npm & composer)
 providers = ["php", "node"]
 
 [variables]
-# Pastikan versi Node & PHP sesuai
+# 2. Pastikan versi konsisten
 NODE_VERSION = "20"
 PHP_VERSION = "8.2"
+# Konfigurasi Nginx untuk mencegah timeout/error 502 pada request panjang
+NIXPACKS_NGINX_CLIENT_MAX_BODY_SIZE = "50M"
 
 [phases.build]
-# Perintah build gabungan (Frontend + Backend)
+# 3. Urutan build: Install Node modules -> Build Frontend -> Install Composer -> Cache Laravel
 cmds = [
     "npm ci",
     "npm run build",
@@ -18,5 +20,5 @@ cmds = [
 ]
 
 [start]
-# Perintah start server
+# 4. Command start aplikasi
 cmd = "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=$PORT"
