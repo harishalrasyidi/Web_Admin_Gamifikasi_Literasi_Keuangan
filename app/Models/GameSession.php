@@ -13,17 +13,14 @@ class GameSession extends Model
     protected $fillable = ['sessionId', 'host_player_id', 'max_players', 'max_turns', 'status', 'current_turn', 'created_at'];
     public $timestamps = false;
 
-    // Relasi ke pemain yang sedang giliran
     public function currentPlayer() {
         return $this->belongsTo(Player::class, 'current_player_id', 'PlayerId');
     }
 
-    // Relasi ke semua pemain di sesi ini (via tabel pivot)
     public function participants() {
         return $this->hasMany(ParticipatesIn::class, 'sessionId', 'sessionId');
     }
 
-    // Relasi ke semua giliran (turns) dalam sesi ini
     public function turns() {
         return $this->hasMany(Turn::class, 'session_id', 'sessionId');
     }

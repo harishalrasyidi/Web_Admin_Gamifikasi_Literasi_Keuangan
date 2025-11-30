@@ -47,7 +47,7 @@ class ANNService
         'investasi' => [
             'Tidak Ada' => 0, 'Sangat Rendah' => 1, 'Rendah' => 2, 'Sedang' => 3, 'Tinggi' => 4, 'Sangat Tinggi' => 5
         ],
-        'asuransi_dan_proteksi' => [ // Maps to 'Asuransi' di ANNController
+        'asuransi_dan_proteksi' => [
             'Tidak Ada' => 0, 'Sangat Rendah' => 1, 'Rendah' => 2, 'Sedang' => 3, 'Tinggi' => 4, 'Sangat Tinggi' => 5
         ],
         'tujuan_jangka_panjang' => [

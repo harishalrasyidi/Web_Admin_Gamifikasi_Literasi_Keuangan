@@ -30,10 +30,8 @@ class User extends Authenticatable
         return $this->passwordHash;
     }
 
-    // 3. Definisikan Relasi ke Player (PENTING!)
     public function player()
     {
-        // hasOne(ModelTujuan, FK_di_tujuan, PK_di_sini)
         return $this->hasOne(Player::class, 'user_id', 'id');
     }
 }

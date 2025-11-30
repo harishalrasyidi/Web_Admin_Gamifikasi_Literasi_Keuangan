@@ -17,11 +17,7 @@ class CardController extends Controller
      */
     public function getQuizCard($id)
     {
-        // 1. Delegasikan ke Service
         $card = $this->cardService->getQuizCard($id);
-
-        // 2. Kembalikan View (JSON)
-        // Respons JSON akan otomatis menyertakan array 'options'
         return response()->json($card);
     }
 }

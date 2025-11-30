@@ -11,6 +11,7 @@ use App\Http\Controllers\PlayerController;
 use App\Http\Controllers\ProfilingController;
 use App\Http\Controllers\ConfigController;
 use App\Http\Controllers\MatchmakingController;
+use App\Http\Controllers\PerformanceController;
 use App\Http\Controllers\RecommendationController;
 use App\Http\Controllers\BoardController;
 use App\Http\Controllers\CardController;
@@ -62,15 +63,17 @@ Route::middleware('auth:sanctum')->group(function () {
         });
         Route::post('/player/move', [SessionController::class, 'move']);
     });
+    Route::get('/tile/{id}', [BoardController::class, 'getTile']);
+    
+    Route::get('/performance/scores', [App\Http\Controllers\PerformanceController::class, 'scores']);
+    Route::post('/feedback/intervention', [FeedbackController::class, 'store']);
+    Route::get('/intervention/trigger', [InterventionController::class, 'trigger']);
 
     Route::get('/scenarios', [ScenarioController::class, 'index']);
     Route::get('/scenario/{scenario}', [ScenarioController::class, 'show']);
     Route::post('/scenario/submit', [ScenarioController::class, 'submit']);
-    Route::post('/feedback/intervention', [FeedbackController::class, 'store']);
-    Route::get('/intervention/trigger', [InterventionController::class, 'trigger']);
     Route::post('/threshold/update', [ThresholdController::class, 'update']);
     Route::get('/threshold', [ThresholdController::class, 'getThresholds']);
-    // Route::get('/tile/{id}', [BoardController::class, 'getTile']);
     Route::get('/card/quiz/{id}', [CardController::class, 'getQuizCard']);
     Route::get('/leaderboard', [LeaderboardController::class, 'getLeaderboard']);
 });

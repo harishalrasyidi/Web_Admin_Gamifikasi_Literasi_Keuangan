@@ -11,6 +11,12 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 
 class SessionService {
+    /*
+    * Mengambil status sesi permainan yang sedang diikuti pemain:
+    * mengecek apakah pemain berada di sesi aktif atau masih menunggu,
+    * memuat state permainan (giliran, fase, skor, posisi), lalu
+    * mengembalikan ringkasan lengkap status sesi dalam bentuk array.
+    */
     public function getSessionState(string $playerId) {
         $participation = ParticipatesIn::where('playerId', $playerId)
             ->whereHas('session', function ($query) {
@@ -88,6 +94,11 @@ class SessionService {
         ];
     }
 
+    /**
+     * Memulai giliran pemain dalam sesi aktif: memastikan pemain berada
+     * di sesi yang benar, mengecek apakah memang gilirannya, lalu
+     * mengatur fase giliran ke 'waiting' dan mengembalikan status giliran.
+     */
     public function startTurn(string $playerId)
     {
         $participation = ParticipatesIn::where('playerId', $playerId)
@@ -119,7 +130,9 @@ class SessionService {
     }
 
     /**
-     * Handle rolling the dice for the player's turn.
+     * Mengocok dadu untuk pemain dalam sesi aktif:
+     * memverifikasi giliran dan fase, menghasilkan nilai dadu acak,
+     * memperbarui fase giliran ke 'rolling', lalu mengembalikan hasilnya.
      */
     public function rollDice(string $playerId)
     {
@@ -159,7 +172,9 @@ class SessionService {
     }
 
     /**
-     * Move the player based on the last rolled dice.
+     * Memindahkan pemain berdasarkan nilai dadu terakhir:
+     * memverifikasi giliran dan fase, menghitung posisi baru,
+     * memperbarui posisi pemain dan fase giliran, lalu mengembalikan detail pergerakan.
      */
     public function movePlayer(string $playerId)
     {
@@ -221,7 +236,9 @@ class SessionService {
     }
 
     /**
-     * Retrieve the current turn information for the authenticated player.
+     * Mengambil informasi giliran saat ini untuk pemain yang diautentikasi:
+     * memverifikasi partisipasi di sesi aktif, memuat state permainan,
+     * lalu mengembalikan detail giliran termasuk pemain saat ini dan aksi terakhir.
      */
     public function getCurrentTurn(string $playerId)
     {
@@ -281,12 +298,16 @@ class SessionService {
         ];
     }
 
+    /**
+     * Mengakhiri giliran pemain dalam sesi aktif:
+     * memverifikasi giliran dan fase, menentukan pemain berikutnya,
+     * memperbarui giliran dan fase, lalu mengembalikan detail giliran berikutnya.
+     */
     public function endTurn(string $playerId)
     {
-        // 1. Cari Sesi Aktif dengan Lock (untuk update data sensitif)
         $participation = ParticipatesIn::where('playerId', $playerId)
             ->whereHas('session', fn($q) => $q->where('status', 'active'))
-            ->with(['session.participants']) // Load semua peserta untuk hitung urutan
+            ->with(['session.participants'])
             ->first();
 
         if (!$participation) {
@@ -295,16 +316,12 @@ class SessionService {
 
         $session = $participation->session;
 
-        // 2. Validasi Giliran
         if ($session->current_player_id !== $playerId) {
             return ['error' => 'It is not your turn to end'];
         }
 
-        // 3. Logika Rotasi Pemain
-        // Urutkan peserta berdasarkan player_order (1, 2, 3...)
         $participants = $session->participants->sortBy('player_order')->values();
         
-        // Cari index pemain saat ini di dalam list
         $currentIndex = $participants->search(function ($p) use ($playerId) {
             return $p->playerId === $playerId;
         });
@@ -313,24 +330,19 @@ class SessionService {
             return ['error' => 'Player participation data error'];
         }
 
-        // Hitung Index Berikutnya (Looping)
-        // Rumus: (Index Sekarang + 1) MOD Total Pemain
         $nextIndex = ($currentIndex + 1) % $participants->count();
         $nextPlayer = $participants[$nextIndex];
 
-        // 4. Update Session Data
         $session->current_player_id = $nextPlayer->playerId;
-        $session->current_turn += 1; // Increment nomor giliran global
+        $session->current_turn += 1;
 
-        // Reset Game State untuk pemain berikutnya
         $gameState = json_decode($session->game_state, true) ?? [];
-        $gameState['turn_phase'] = 'waiting'; // Set ke waiting agar next player bisa Start
-        $gameState['last_dice'] = 0; // Reset dadu
+        $gameState['turn_phase'] = 'waiting';
+        $gameState['last_dice'] = 0;
         
         $session->game_state = json_encode($gameState);
         $session->save();
 
-        // 5. Return Response
         return [
             'turn_phase' => 'completed',
             'next_turn_player_id' => $nextPlayer->playerId,

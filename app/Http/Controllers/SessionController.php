@@ -15,7 +15,6 @@ class SessionController extends Controller
 
     /**
      * Retrieve the current state of the game session for the authenticated player.
-     * 
      */
     public function state(Request $request){
         $user = $request->user();

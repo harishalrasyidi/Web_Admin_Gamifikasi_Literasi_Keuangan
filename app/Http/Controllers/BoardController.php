@@ -2,25 +2,44 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\BoardService; // <-- Impor Service
+use App\Services\BoardService;
 use Illuminate\Http\Request;
 
 class BoardController extends Controller
 {
-    // Suntikkan (inject) Service
-    public function __construct(protected BoardService $boardService)
+    protected $boardService;
+
+    public function __construct(BoardService $boardService)
     {
+        $this->boardService = $boardService;
     }
 
     /**
-     * Implementasi: GET /tile/{id}
+     * GET /tile/{tile_id}
+     * Mengambil info kotak dan memicu event.
+     * Catatan: {tile_id} di URL ini merepresentasikan position_index (int)
      */
-    public function getTile($id)
+    public function getTile(Request $request, $tileId)
     {
-        // 1. Delegasikan ke Service
-        $tileData = $this->boardService->getTileDetails($id);
-        
-        // 2. Kembalikan View (JSON)
-        return response()->json($tileData);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
+        }
+
+        try {
+            // Konversi ke integer karena kita pakai index
+            $tileIndex = (int) $tileId;
+
+            $result = $this->boardService->resolveTileEvent($user->player->PlayerId, $tileIndex);
+
+            if (isset($result['error'])) {
+                return response()->json($result, 400);
+            }
+
+            return response()->json($result, 200);
+
+        } catch (\Exception $e) {
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
     }
 }

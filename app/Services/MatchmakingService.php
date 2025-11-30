@@ -12,9 +12,8 @@ use Illuminate\Support\Facades\DB;
 class MatchmakingService
 {
     /**
-     * Logika Utama Matchmaking
-     * POST /matchmaking/join
-     */
+     * Memasukkan pemain ke dalam antrean matchmaking berbasis sesi.
+    */
     public function joinMatchmaking(string $playerId)
     {
         return DB::transaction(function () use ($playerId) {
@@ -69,7 +68,7 @@ class MatchmakingService
     }
 
     /**
-     * Tambah Pemain ke Sesi
+     * Menambah pemain ke sebuah sesi permainan
      */
     private function addPlayerToSession($sessionId, $playerId, $isHost = false)
     {
@@ -91,8 +90,8 @@ class MatchmakingService
     }
 
     /**
-     * Mendapatkan Data Sesi untuk Response
-     */
+     * Mengambil dan merakit data lengkap sebuah sesi permainan untuk dikirim ke client.
+    */
     public function getSessionData($sessionId, $statusMessage)
     {
         $session = GameSession::with('participants')->find($sessionId);
@@ -120,7 +119,7 @@ class MatchmakingService
     }
 
     /**
-     * Memperbarui Karakter Pemain
+     * Memperbarui karakter yang dipilih pemain beserta avatar visualnya.
      */
     public function updatePlayerCharacter(string $playerId, string $characterId) {
         $player = Player::find($playerId);
@@ -141,6 +140,9 @@ class MatchmakingService
         return "https://api.dicebear.com/7.x/adventurer/svg?seed=Char_" . $id;
     }
 
+    /**
+     * Mengambil status terbaru matchmaking/lobi untuk seorang pemain.
+    */
     public function getMatchmakingStatus(string $playerId)
     {
         $participation = ParticipatesIn::where('playerId', $playerId)
@@ -194,6 +196,9 @@ class MatchmakingService
         ];
     }
 
+    /**
+     * Menandai status kesiapan (ready / not ready) seorang pemain di sebuah session yang masih dalam status 'waiting'.
+    */
     public function setPlayerReady(string $playerId, bool $isReady) {
         $participation = ParticipatesIn::where('playerId', $playerId)
             ->WhereHas('session', function ($query) {

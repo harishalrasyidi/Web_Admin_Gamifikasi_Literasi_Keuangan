@@ -15,9 +15,13 @@ class RecommendationService
         $this->cosine = $cosine;
     }
 
-    /**
-     * Logika 1: Cosine Similarity untuk Pertanyaan Selanjutnya
-     */
+    /*
+    * Memberikan rekomendasi skenario pertanyaan berikutnya untuk pemain:
+    * mengambil profil dan skor lifetime, menentukan kategori terlemah,
+    * mencari daftar skenario yang relevan, menghitung kemiripan (cosine similarity)
+    * antara kemampuan pemain dan tingkat kesulitan skenario, lalu memilih
+    * pertanyaan terbaik yang dapat meningkatkan skor pemain.
+    */
     public function recommendNextQuestion(string $playerId)
     {
         $profile = PlayerProfile::find($playerId);
@@ -79,56 +83,77 @@ class RecommendationService
         ];
     }
 
-    /**
-     * Logika 2: Rekomendasi Path Pembelajaran
-     */
+    /*
+    * Menghasilkan jalur rekomendasi peningkatan skor untuk pemain:
+    * membaca profil dan skor saat ini, menentukan target skor berikutnya,
+    * memetakan area kelemahan, lalu membuat estimasi langkah, waktu, dan potensi peningkatan.
+    */
     public function getRecommendationPath(string $playerId)
     {
         $profile = PlayerProfile::find($playerId);
         if (!$profile) return null;
 
-        $weakAreas = $profile->weak_areas ?? ['general_basics'];
+        $currentScore = $this->calculateOverall($profile->lifetime_scores ?? []);
+        $currentScore = round($currentScore);
+
+        $targetScore = 80;
+        if ($currentScore >= 80) $targetScore = 90;
+        if ($currentScore >= 90) $targetScore = 100;
+
+        $weakAreas = $profile->weak_areas ?? ['literasi_dasar'];
         
         $steps = [];
         $phase = 1;
+        $totalSessions = 0;
+        $totalGain = 0;
+
         foreach ($weakAreas as $area) {
+            $focusName = ucwords(str_replace(['_', 'dan'], [' ', '&'], $area));
+            
+            $sessions = rand(2, 3); 
+            $gain = rand(10, 15);
+
             $steps[] = [
                 'phase' => $phase++,
-                'focus' => ucwords(str_replace('_', ' ', $area)),
-                'estimated_time' => '2 sesi',
-                'estimated_gain' => '+10 poin'
+                'focus' => $focusName,
+                'estimated_time' => "{$sessions} sesi",
+                'estimated_gain' => "+{$gain} poin"
             ];
+
+            $totalSessions += $sessions;
+            $totalGain += $gain;
         }
 
         return [
-            'player_id' => $playerId,
-            'title' => 'Personalized Learning Path',
-            'steps' => $steps
+            'title' => "Path Optimal ke Skor {$targetScore}+",
+            'current_score' => $currentScore,
+            'target_score' => $targetScore,
+            'steps' => $steps,
+            'total_estimated_time' => "{$totalSessions} sesi",
+            'success_probability' => "$profile->confidence_level"
         ];
     }
 
-
     /**
-     * Logika 3: Perbandingan Peer
+     * Menghasilkan perbandingan performa pemain terhadap seluruh pemain lain
+     * Mengambil profil pemain dan menghitung skor keseluruhan saat ini, mengumpulkan skor keseluruhan dari semua pemain sebagai basis komparasi, 
+     * menghitung rata-rata, persentil, serta ambang masuk Top 10%, menyusun insight naratif berdasarkan posisi pemain dan area kelemahan.
      */
     public function getPeerComparison(string $playerId)
     {
-        // 1. Ambil Profil Pemain Saat Ini
         $currentPlayer = PlayerProfile::find($playerId);
         if (!$currentPlayer || empty($currentPlayer->lifetime_scores)) {
             return null;
         }
 
-        // Hitung skor overall pemain ini
         $currentScoresRaw = $currentPlayer->lifetime_scores;
         $playerScore = $this->calculateOverall($currentScoresRaw);
 
-        // 2. Ambil Populasi Skor (Bisa di-cache untuk performa)
-        $allProfiles = PlayerProfile::whereNotNull('lifetime_scores')->pluck('lifetime_scores');
+        $allProfiles = PlayerProfile::whereNotNull('lifetime_scores')->get();
 
         $allOverallScores = [];
-        foreach ($allProfiles as $jsonScore) {
-            $scores = json_decode($jsonScore, true);
+        foreach ($allProfiles as $p) {
+            $scores = $p->lifetime_scores;
             if (is_array($scores)) {
                 $allOverallScores[] = $this->calculateOverall($scores);
             }
@@ -138,35 +163,30 @@ class RecommendationService
             $allOverallScores = [0];
         }
 
-        // 3. Hitung Statistik Populasi
         $count = count($allOverallScores);
         $average = array_sum($allOverallScores) / $count;
         
         sort($allOverallScores);
 
-        // Hitung Percentile (Rank)
         $rank = 0;
         foreach ($allOverallScores as $s) {
             if ($s < $playerScore) $rank++;
         }
         $percentile = ($count > 1) ? ($rank / ($count - 1)) * 100 : 100;
 
-        // Hitung Top 10% Threshold (90th Percentile)
         $top10Index = floor(0.9 * $count);
         $top10Index = min($top10Index, $count - 1);
         $top10Threshold = $allOverallScores[$top10Index];
 
-        // 4. Generate Insights (Kata-kata Mutiara/Saran)
-        $insights = [];
+        $weakAreas = $currentPlayer->weak_areas ?? [];
         
-        // Insight 1: Posisi Rata-rata
+        $insights = [];
         if ($playerScore >= $average) {
             $insights[] = "Skor kamu di atas rata-rata pemain lain! 👍";
         } else {
             $insights[] = "Skor kamu sedikit di bawah rata-rata, yuk kejar ketertinggalan!";
         }
 
-        // Insight 2: Target Top 10%
         if ($playerScore < $top10Threshold) {
             $gap = round($top10Threshold - $playerScore);
             $insights[] = "Butuh +{$gap} poin lagi untuk masuk jajaran Top 10% Elite.";
@@ -174,14 +194,11 @@ class RecommendationService
             $insights[] = "Luar biasa! Kamu termasuk dalam Top 10% pemain terbaik.";
         }
 
-        // Insight 3: Saran Spesifik berdasarkan Kelemahan
-        $weakAreas = $currentPlayer->weak_areas ?? [];
         if (!empty($weakAreas)) {
             $weakest = ucwords(str_replace('_', ' ', $weakAreas[0]));
             $insights[] = "Pemain yang fokus memperbaiki '$weakest' biasanya naik level 45% lebih cepat.";
         }
 
-        // 5. Return Format
         return [
             'player_score' => round($playerScore),
             'average' => round($average),
@@ -192,7 +209,7 @@ class RecommendationService
     }
 
     /**
-     * Helper: Hitung rata-rata dari array skor kategori
+     * Menghitung rata-rata dari array skor kategori
      */
     private function calculateOverall(array $scores): float
     {
@@ -240,21 +257,5 @@ class RecommendationService
         }
         
         return array_values($vectorTemplate);
-    }
-
-    /**
-     * Menghasilkan insight berdasarkan data peer
-     */
-    private function generatePeerInsight(string $category): string
-    {
-        // Simulasi Insight (Nanti bisa diganti query real statistik)
-        $insights = [
-            "82% pemain dengan profil serupa berhasil meningkat setelah scenario ini.",
-            "Pemain lain biasanya butuh 2x percobaan untuk materi ini, buktikan kamu lebih baik!",
-            "Top 10% pemain memprioritaskan kategori ini di awal permainan.",
-            "Menyelesaikan topik ini meningkatkan peluang 'Financial Freedom' sebesar 15%."
-        ];
-        
-        return $insights[array_rand($insights)];
     }
 }

@@ -9,44 +9,36 @@ use Illuminate\Support\Facades\Validator;
 
 class FeedbackController extends Controller
 {
-    protected $service;
+    protected $feedbackService;
 
-    public function __construct(FeedbackService $service)
+    public function __construct(FeedbackService $feedbackService)
     {
-        $this->service = $service;
+        $this->feedbackService = $feedbackService;
     }
 
-    /**
-     * API 28: POST /feedback/intervention
-     * Menyimpan hasil intervensi/perilaku player
-     */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'intervention_id' => 'required|string',
-            'scenario_id' => 'required|string|exists:scenarios,id',
-            'player_response' => 'required|string|in:ignored,heeded,skipped'
+            'scenario_id' => 'required|string',
+            'player_response' => 'required|string'
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'ok' => false,
-                'errors' => $validator->errors()
-            ], 422);
+        $user = $request->user();
+        if (!$user || !$user->player) {
+            return response()->json(['error' => 'Player profile not found'], 404);
         }
 
         try {
-            $this->service->processFeedback($validator->validated());
+            $result = $this->feedbackService->storeInterventionFeedback(
+                $user->player->PlayerId,
+                $validated
+            );
 
-            return response()->json([
-                'ok' => true
-            ], 200);
+            return response()->json($result, 200);
+
         } catch (\Exception $e) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Gagal menyimpan feedback',
-                'error' => $e->getMessage()
-            ], 500);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
     }
 }

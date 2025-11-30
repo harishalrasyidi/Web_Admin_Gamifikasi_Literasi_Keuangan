@@ -14,10 +14,10 @@ class AuthController extends Controller
         $this->playerService = $playerService;
     }
 
-    /**
-     * Login dengan Google
-     * POST /auth/google
-     */
+    /*
+     * Initial State: 
+     * Final State: 
+    */
     public function google(Request $request)
     {
         $data = $request->validate([

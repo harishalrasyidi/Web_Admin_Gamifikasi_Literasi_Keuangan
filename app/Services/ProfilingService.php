@@ -11,7 +11,6 @@ class ProfilingService
 {
     protected $fuzzy;
     protected $ann;
-    protected $cosine;
 
     private const CLUSTER_PROFILES = [
         'Financial Novice' => [
@@ -66,9 +65,9 @@ class ProfilingService
         $this->ann = $ann;
     }
 
-        /**
-     * Mendapatkan status profiling untuk pemain tertentu.
-     */
+    /**
+     * Mengecek status profiling pemain berdasarkan data yang tersimpan.
+    */
     public function getProfilingStatus(string $playerId)
     {
         $profile = PlayerProfile::find($playerId);
@@ -108,6 +107,10 @@ class ProfilingService
         ];
     }
     
+    /**
+     * Menyimpan jawaban onboarding pemain dan, bila diminta,
+     * memicu proses profiling (clustering) secara otomatis.
+     */
     public function saveOnboardingAnswers(array $input)
     {
         PlayerProfile::updateOrCreate(
@@ -127,6 +130,9 @@ class ProfilingService
         return ['ok' => true ];
     }
 
+    /**
+     * Menjalankan proses profiling (clustering) untuk seorang pemain.
+    */
     public function runProfilingCluster(string $playerId)
     {
         $input = ProfilingInput::where('player_id', $playerId)->latest()->first();

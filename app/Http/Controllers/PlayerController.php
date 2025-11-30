@@ -14,10 +14,10 @@ class PlayerController extends Controller
         $this->playerService = $playerService;
     }
 
-    /**
-     * Login dengan Google
-     * POST /auth/google
-     */
+    /* Memproses login via Google ID Token
+    *  memvalidasi input, meneruskan data ke PlayerService untuk autentikasi,
+    *  lalu mengembalikan respons JSON berisi hasil login atau error jika gagal.
+    */
     public function googleLogin(Request $request)
     {
         $data = $request->validate([
@@ -32,7 +32,6 @@ class PlayerController extends Controller
             return response()->json($result, 200);
 
         } catch (\Exception $e) {
-            // Tangani error jika token Google tidak valid
             return response()->json([
                 'error' => 'Authentication Failed',
                 'message' => $e->getMessage()
