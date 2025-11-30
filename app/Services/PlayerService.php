@@ -22,11 +22,11 @@ class PlayerService
         $platform = $data['platform'] ?? 'web';
         $locale = $data['locale'] ?? 'id_ID';
 
-        $googleId = 'google_id_tester_001'; 
-        $name = 'Tester Postman';
-        $avatar = 'https://ui-avatars.com/api/?name=Tester+Postman';
+        // $googleId = 'google_id_tester_001'; 
+        // $name = 'Tester Postman';
+        // $avatar = 'https://ui-avatars.com/api/?name=Tester+Postman';
         
-        /*
+        
         $client = new Google_Client(['client_id' => env('GOOGLE_CLIENT_ID')]);
         try {
             $payload = $client->verifyIdToken($idToken);
@@ -41,7 +41,7 @@ class PlayerService
         $email = $payload['email'];
         $name = $payload['name'];
         $avatar = $payload['picture'] ?? null;
-        */
+        
         
         return DB::transaction(function () use ($googleId, $name, $avatar, $platform, $locale) {
             $user = User::firstOrCreate(
