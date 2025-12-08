@@ -13,7 +13,7 @@ class PerformanceService
      */
     public function getPerformanceScores(string $playerId)
     {
-        $profile = PlayerProfile::find($playerId);
+            $profile = PlayerProfile::find($playerId);
 
         if (!$profile) {
             return null;

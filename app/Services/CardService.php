@@ -42,8 +42,8 @@ class CardService
             // 3. Tentukan Kategori Terpengaruh
             // Ambil kategori pertama dari array categories di kartu (misal: ["Anggaran"])
             $categories = $card->categories ?? ['General'];
-            $affectedCategoryKey = strtolower($categories[0] ?? 'pendapatan'); 
-            
+            $affectedCategoryKey = strtolower($categories[0] ?? 'pendapatan');
+
             $scoreKeyMap = [
                 'anggaran' => 'anggaran',
                 'pendapatan' => 'pendapatan',
@@ -56,6 +56,9 @@ class CardService
             $targetScoreKey = $scoreKeyMap[$affectedCategoryKey] ?? $affectedCategoryKey;
 
             $currentScores = $profile->lifetime_scores ?? [];
+            if (is_string($currentScores)) {
+                $currentScores = json_decode($currentScores, true) ?? [];
+            }
             $oldValue = $currentScores[$targetScoreKey] ?? 0;
             $change = $card->scoreChange;
             $newValue = max(0, $oldValue + $change);
@@ -66,7 +69,7 @@ class CardService
             if ($card->action === 'roll_loss' || $card->action === 'random_choice') {
                 // Simulasi 3 kemungkinan hasil
                 $possibleTiles = ["Makan", "Transportasi", "Nongkrong"];
-                $dicePreroll = rand(0, 2); 
+                $dicePreroll = rand(0, 2);
             }
 
             // 6. Simpan Perubahan ke Database
@@ -98,16 +101,18 @@ class CardService
             ->whereHas('session', fn($q) => $q->where('status', 'active'))
             ->first();
 
-        PlayerDecision::create([
-            'player_id' => $playerId,
-            'session_id' => $participation->sessionId ?? 'unknown',
-            'turn_number' => $participation->session->current_turn ?? 0,
-            'content_id' => $cardId,
-            'content_type' => 'risk_card',
-            'is_correct' => 0, // Kartu tidak ada benar/salah
-            'score_change' => $scoreChange,
-            'created_at' => now()
-        ]);
+        if ($participation) {
+            PlayerDecision::create([
+                'player_id' => $playerId,
+                'session_id' => $participation->sessionId,
+                'turn_number' => $participation->session->current_turn ?? 0,
+                'content_id' => $cardId,
+                'content_type' => 'risk_card',
+                'is_correct' => 0, // Kartu tidak ada benar/salah
+                'score_change' => $scoreChange,
+                'created_at' => now()
+            ]);
+        }
     }
 
     public function drawChanceCard(string $playerId, string $cardId)
@@ -129,7 +134,7 @@ class CardService
             // 3. Tentukan Kategori Terpengaruh
             $categories = $card->categories ?? ['General'];
             $affectedCategoryKey = strtolower($categories[0] ?? 'pendapatan');
-            
+
             // Mapping key skor (sama seperti risk)
             $scoreKeyMap = [
                 'anggaran' => 'anggaran',
@@ -144,6 +149,9 @@ class CardService
 
             // 4. Hitung Perubahan Skor (Biasanya Positif)
             $currentScores = $profile->lifetime_scores ?? [];
+            if (is_string($currentScores)) {
+                $currentScores = json_decode($currentScores, true) ?? [];
+            }
             $oldValue = $currentScores[$targetScoreKey] ?? 0;
             $change = $card->scoreChange; // Nilai dari DB (misal: +5)
             $newValue = $oldValue + $change;
@@ -160,7 +168,7 @@ class CardService
             } else {
                 // Jika action standar (langsung dapat), possible_tiles bisa diisi info target
                 // Sesuai contoh request Anda: possible_tiles = ["Pendidikan"]
-                $possibleTiles = ["Start"]; 
+                $possibleTiles = ["Start"];
                 $dicePreroll = 0; // Default index 0
             }
 
@@ -189,9 +197,11 @@ class CardService
     public function getQuizCardDetail(string $playerId, string $quizId)
     {
         // 1. Ambil Data Kuis & Opsi
-        $quiz = QuizCard::with(['options' => function($q) {
-            $q->orderBy('optionId');
-        }])->find($quizId);
+        $quiz = QuizCard::with([
+            'options' => function ($q) {
+                $q->orderBy('optionId');
+            }
+        ])->find($quizId);
 
         if (!$quiz) {
             return ['error' => 'Quiz card not found'];
@@ -203,14 +213,29 @@ class CardService
         $hasIntervention = !empty($interventionCheck);
 
         // 3. Tentukan Kategori (Ambil dari tags pertama atau default)
-        $category = 'General';
+        $rawCategory = 'General';
         if (!empty($quiz->tags) && is_array($quiz->tags)) {
-            $category = $quiz->tags[0];
+            $rawCategory = $quiz->tags[0];
         }
+
+        // Mapping ke Readable Name - STRICT 7 CATEGORIES
+        $categoryMap = [
+            'pendapatan' => 'Pendapatan',
+            'anggaran' => 'Anggaran',
+            'tabungan_dan_dana_darurat' => 'Tabungan & Dana Darurat',
+            'utang' => 'Utang',
+            'investasi' => 'Investasi',
+            'asuransi_dan_proteksi' => 'Asuransi & Proteksi',
+            'tujuan_jangka_panjang' => 'Tujuan Jangka Panjang',
+            // Mapping alias/legacy
+            'literasi_dasar' => 'Tujuan Jangka Panjang', // Mapping logical untuk Quiz
+            'risiko' => 'Asuransi & Proteksi'
+        ];
+        $readableCategory = $categoryMap[$rawCategory] ?? 'Tujuan Jangka Panjang'; // Default fallback safe
 
         // 4. Format Response
         return [
-            'card_category' => ucfirst($category),
+            'card_category' => $readableCategory,
             'question' => $quiz->question,
             'options' => $quiz->options->map(function ($opt) {
                 return [
@@ -237,21 +262,22 @@ class CardService
             // 2. Cek Kebenaran Jawaban
             // Di DB, correctOption menyimpan ID opsi yang benar (misal "B")
             $isCorrect = ($quiz->correctOption === $selectedOption);
-            
+
             // Tentukan perubahan skor
             $scoreChange = $isCorrect ? $quiz->correctScore : $quiz->incorrectScore;
 
             // 3. Ambil Profil Pemain
             $profile = PlayerProfile::find($playerId);
-            if (!$profile) return ['error' => 'Player profile not found'];
+            if (!$profile)
+                return ['error' => 'Player profile not found'];
 
-            $categoryLabel = $quiz->tags[0] ?? 'pendapatan'; 
+            $categoryLabel = $quiz->tags[0] ?? 'pendapatan';
 
             // 5. Update Skor
             $currentScores = $profile->lifetime_scores ?? [];
             $oldVal = $currentScores[$categoryLabel] ?? 0;
             $newVal = $oldVal + $scoreChange;
-            
+
             // Opsional: Cegah nilai negatif
             // $newVal = max(0, $newVal); 
 

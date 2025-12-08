@@ -102,16 +102,17 @@ class RecommendationService
                 $profile->PlayerId = $playerId;
             }
             // Inject dummy data for logic processing
+            // Target: Overall 58. Weak areas: Tabungan & Utang.
             $profile->lifetime_scores = [
-                'pendapatan' => 50,
-                'anggaran' => 60,
-                'tabungan_dan_dana_darurat' => 40,
-                'utang' => 20,
-                'investasi' => 10,
-                'asuransi_dan_proteksi' => 30,
-                'tujuan_jangka_panjang' => 50
+                'pendapatan' => 65,
+                'anggaran' => 65,
+                'tabungan_dan_dana_darurat' => 50,
+                'utang' => 45,
+                'investasi' => 60,
+                'asuransi_dan_proteksi' => 60,
+                'tujuan_jangka_panjang' => 60
             ];
-            $profile->weak_areas = ['utang', 'tabungan_dan_dana_darurat'];
+            $profile->weak_areas = ['Dana Darurat & Tabungan', 'Utang & Paylater'];
             $profile->confidence_level = 0.78;
         } else {
             $profile = PlayerProfile::find($playerId);
@@ -142,32 +143,40 @@ class RecommendationService
 
         $steps = [];
         $phase = 1;
-        $totalSessions = 0;
+        $totalMinSessions = 0;
+        $totalMaxSessions = 0;
         $totalGain = 0;
 
         foreach ($weakAreas as $area) {
             $focusName = ucwords(str_replace(['_dan_', '_'], [' & ', ' '], $area));
 
-            $sessions = rand(2, 3);
+            // Logic range: 2 to 3 sessions
+            $minSessions = 2;
+            $maxSessions = rand(2, 3);
             $gain = rand(10, 15);
+
+            $timeString = ($minSessions == $maxSessions) ? "{$minSessions} sesi" : "{$minSessions}-{$maxSessions} sesi";
 
             $steps[] = [
                 'phase' => $phase++,
                 'focus' => $focusName,
-                'estimated_time' => "{$sessions} sesi",
+                'estimated_time' => $timeString,
                 'estimated_gain' => "+{$gain} poin"
             ];
 
-            $totalSessions += $sessions;
+            $totalMinSessions += $minSessions;
+            $totalMaxSessions += $maxSessions;
             $totalGain += $gain;
         }
+
+        $totalTimeString = ($totalMinSessions == $totalMaxSessions) ? "{$totalMinSessions} sesi" : "{$totalMinSessions}-{$totalMaxSessions} sesi";
 
         return [
             'title' => "Path Optimal ke Skor {$targetScore}+",
             'current_score' => $currentScore,
             'target_score' => $targetScore,
             'steps' => $steps,
-            'total_estimated_time' => "{$totalSessions} sesi",
+            'total_estimated_time' => $totalTimeString,
             'success_probability' => number_format($profile->confidence_level * 100, 0) . "% berdasarkan pemain serupa"
         ];
     }

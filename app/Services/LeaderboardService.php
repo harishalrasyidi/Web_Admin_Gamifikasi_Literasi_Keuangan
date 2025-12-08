@@ -19,8 +19,11 @@ class LeaderboardService
 
         // 2. Map data ke format yang butuhkan & Hitung Overall Score
         $rankedPlayers = $profiles->map(function ($profile) {
-            $scores = $profile->lifetime_scores ?? []; // Sudah array karena casts
-            
+            $scores = $profile->lifetime_scores ?? [];
+            if (is_string($scores)) {
+                $scores = json_decode($scores, true) ?? [];
+            }
+
             // Hitung Overall Score
             // Jika sudah ada key 'overall' di JSON, pakai itu. Jika tidak, hitung rata-rata.
             if (isset($scores['overall'])) {
@@ -34,9 +37,9 @@ class LeaderboardService
 
             return [
                 'player_id' => $profile->PlayerId,
-                'username'  => $profile->player->name ?? 'Unknown Player',
-                'avatar'    => $profile->player->avatar_url ?? null, // Opsional: untuk UI
-                'overall'   => round($overall) // Bulatkan skor
+                'username' => $profile->player->name ?? 'Unknown Player',
+                'avatar' => $profile->player->avatar_url ?? null, // Opsional: untuk UI
+                'overall' => round($overall) // Bulatkan skor
             ];
         });
 
