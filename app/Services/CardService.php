@@ -94,7 +94,7 @@ class CardService
         });
     }
 
-    private function logCardHistory($playerId, $cardId, $scoreChange)
+    private function logCardHistory($playerId, $cardId, $scoreChange, $contentType = 'risk_card')
     {
         // Cari sesi aktif untuk konteks log
         $participation = ParticipatesIn::where('playerId', $playerId)
@@ -107,7 +107,7 @@ class CardService
                 'session_id' => $participation->sessionId,
                 'turn_number' => $participation->session->current_turn ?? 0,
                 'content_id' => $cardId,
-                'content_type' => 'risk_card',
+                'content_type' => $contentType,
                 'is_correct' => 0, // Kartu tidak ada benar/salah
                 'score_change' => $scoreChange,
                 'created_at' => now()
@@ -178,7 +178,7 @@ class CardService
             $profile->save();
 
             // Catat History
-            $this->logCardHistory($playerId, $cardId, $change);
+            $this->logCardHistory($playerId, $cardId, $change, 'risk_card');
 
             // 7. Format Response
             return [
