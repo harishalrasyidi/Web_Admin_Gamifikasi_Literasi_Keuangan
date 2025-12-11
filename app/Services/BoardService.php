@@ -24,6 +24,24 @@ class BoardService
                 ->first();
 
             if (!$participation) {
+                // Mock Bypass for Dummy Player
+                if ($playerId === 'player_dummy_profiling_infinite') {
+                    $tile = BoardTile::where('position_index', $tileIndex)->first();
+                    if (!$tile)
+                        return ['error' => 'Tile not found'];
+
+                    // Mock content determination (simplified)
+                    $mockResultId = $this->determineContentId($tile);
+
+                    return [
+                        'title' => $tile->name,
+                        'category' => $tile->category ?? 'General',
+                        'type' => $tile->type,
+                        'result_id' => $mockResultId,
+                        'turn_phase' => 'resolving_event (MOCK)'
+                    ];
+                }
+
                 return ['error' => 'Player is not in an active session'];
             }
 
@@ -33,7 +51,7 @@ class BoardService
             if ($session->current_player_id !== $playerId) {
                 return ['error' => 'It is not your turn'];
             }
-            
+
             // Validasi: Apakah pemain benar-benar ada di kotak yang diminta?
             // (Opsional, tapi bagus untuk keamanan)
             if ($participation->position != $tileIndex) {
@@ -53,7 +71,7 @@ class BoardService
             // 5. Update Game State -> resolving_event
             $gameState = json_decode($session->game_state, true) ?? [];
             $gameState['turn_phase'] = 'resolving_event';
-            
+
             // Simpan event yang sedang aktif agar bisa divalidasi saat submit jawaban
             $gameState['active_event'] = [
                 'type' => $tile->type,
@@ -92,7 +110,8 @@ class BoardService
             case 'scenario':
                 // Ambil scenario acak (bisa difilter by category tile jika ada)
                 $query = Scenario::query();
-                if ($tile->category) $query->where('category', $tile->category);
+                if ($tile->category)
+                    $query->where('category', $tile->category);
                 return $query->inRandomOrder()->value('id') ?? 'sc_default';
 
             case 'risk':
@@ -108,7 +127,7 @@ class BoardService
 
             default:
                 // Untuk kotak Start, Parkir Bebas, dll.
-                return $tile->tile_id; 
+                return $tile->tile_id;
         }
     }
 }
