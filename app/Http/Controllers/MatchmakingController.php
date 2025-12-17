@@ -9,7 +9,7 @@ class MatchmakingController extends Controller
 {
     protected $sessionService;
 
-        public function __construct(MatchmakingService $sessionService)
+    public function __construct(MatchmakingService $sessionService)
     {
         $this->sessionService = $sessionService;
     }
@@ -38,22 +38,27 @@ class MatchmakingController extends Controller
         }
     }
 
-    public function selectCharacter(Request $request) {
+    public function selectCharacter(Request $request)
+    {
+        if ($request->has('characterId') && !$request->has('character_id')) {
+            $request->merge(['character_id' => $request->input('characterId')]);
+        }
+
         $request->validate([
             'character_id' => 'required|integer'
         ]);
-        
+
         $user = $request->user();
         if (!$user || !$user->player) {
             return response()->json(['error' => 'Player profile not found'], 404);
         }
         try {
-        $result = $this->sessionService->updatePlayerCharacter(
-            $user->player->PlayerId,
-            $request->input('character_id')
-        );
+            $result = $this->sessionService->updatePlayerCharacter(
+                $user->player->PlayerId,
+                $request->input('character_id')
+            );
 
-        return response()->json($result, 200);
+            return response()->json($result, 200);
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage()], 500);
         }
@@ -68,7 +73,7 @@ class MatchmakingController extends Controller
 
         try {
             $result = $this->sessionService->getMatchmakingStatus($user->player->PlayerId);
-            
+
             // Jika user tidak punya sesi
             if (isset($result['error'])) {
                 return response()->json($result, 404);
@@ -81,7 +86,8 @@ class MatchmakingController extends Controller
         }
     }
 
-    public function ready(Request $request) {
+    public function ready(Request $request)
+    {
         $request->validate([
             'is_ready' => 'required|boolean'
         ]);

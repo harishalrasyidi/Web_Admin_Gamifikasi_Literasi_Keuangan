@@ -17,7 +17,7 @@ class FeedbackService
             ->with('session')
             ->first();
 
-        $sessionId = $participation ? $participation->sessionId : 'unknown_session';
+        $sessionId = $participation ? $participation->sessionId : null;
         $turnNumber = $participation ? ($participation->session->current_turn ?? 0) : 0;
 
         // Catat sebagai keputusan (decision) tipe 'intervention_response'

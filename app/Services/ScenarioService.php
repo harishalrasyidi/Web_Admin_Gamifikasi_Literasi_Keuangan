@@ -25,16 +25,18 @@ class ScenarioService
      */
     public function getScenarioDetail(string $playerId, string $scenarioId)
     {
-        $scenario = Scenario::with(['options' => function($q) {
-            $q->orderBy('optionId');
-        }])->find($scenarioId);
+        $scenario = Scenario::with([
+            'options' => function ($q) {
+                $q->orderBy('optionId');
+            }
+        ])->find($scenarioId);
 
         if (!$scenario) {
             return ['error' => 'Scenario not found'];
         }
 
         $interventionCheck = $this->interventionService->checkInterventionTrigger($playerId);
-        
+
         $hasIntervention = !empty($interventionCheck);
 
         return [
@@ -61,10 +63,10 @@ class ScenarioService
         return DB::transaction(function () use ($playerId, $data) {
             $scenarioId = $data['scenario_id'];
             $selectedOptionId = $data['selected_option'];
-            
+
             $option = ScenarioOption::where('scenarioId', $scenarioId)
-                        ->where('optionId', $selectedOptionId)
-                        ->first();
+                ->where('optionId', $selectedOptionId)
+                ->first();
 
             if (!$option) {
                 return ['error' => 'Invalid option selected'];
@@ -94,10 +96,10 @@ class ScenarioService
                     $maxChangeVal = $change;
                     $primaryAffected = $category;
                 }
-                
+
                 $totalChange += $change;
             }
-            
+
             $profile->lifetime_scores = $currentScores;
             $profile->save();
 
@@ -107,7 +109,7 @@ class ScenarioService
                 ->with('session')
                 ->first();
 
-            $sessionId = $participation ? $participation->sessionId : 'unknown_session';
+            $sessionId = $participation ? $participation->sessionId : null;
             $turnNumber = $participation ? ($participation->session->current_turn ?? 0) : 0;
 
             PlayerDecision::create([
