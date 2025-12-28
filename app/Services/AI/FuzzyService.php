@@ -87,8 +87,8 @@ class FuzzyService
             'Sangat Rendah' => [0, 0, 20, 40],
             'Rendah'        => [20, 35, 50, 65],
             'Sedang'        => [50, 65, 80, 90],
-            'Tinggi'        => [80, 90, 100, 100],
-            'Sangat Tinggi' => [90, 100, 100, 100],
+            'Tinggi'        => [80, 90, 95, 100],
+            'Sangat Tinggi' => [90, 95, 100, 105],
 
         ];
 
@@ -109,7 +109,7 @@ class FuzzyService
      */
     private function trapezoidal(float $x, float $a, float $b, float $c, float $d): float
     {
-        if ($x <= $a || $x >= $d) {
+        if ($x <= $a || $x > $d) {
             return 0.0;
         } elseif ($x >= $b && $x <= $c) {
             return 1.0;
